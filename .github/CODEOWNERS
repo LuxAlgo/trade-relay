@@ -1,0 +1,5 @@
+# Changes to licensing, trademarks, and CI require LuxAlgo review.
+LICENSE business@luxalgo.com
+TRADEMARKS.md business@luxalgo.com
+/.github/workflows/ business@luxalgo.com
+/.github/CODEOWNERS business@luxalgo.com

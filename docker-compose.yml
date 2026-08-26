@@ -1,0 +1,13 @@
+services:
+  trade-relay:
+    build: .
+    ports:
+      - "8484:8484"
+    volumes:
+      - trade-relay-data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  trade-relay-data:

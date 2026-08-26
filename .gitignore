@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+trade-relay.db
+trade-relay.db-*
+*.sqlite
+coverage/
+.DS_Store
