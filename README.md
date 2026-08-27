@@ -22,9 +22,9 @@
   <a href="docs/migrate-signalstack.md"><b>Leave SignalStack</b></a>
 </p>
 
-**trade-relay is a self-hosted relay between trading alerts and real broker accounts.** Point a TradingView alert, a Zapier zap, an AI agent, or anything that can send a webhook at your own deployment. It parses the alert, runs it through risk rails that are on by default, places the order at your broker with your own keys, and records the entire story locally.
+**Trade Relay is a self-hosted relay between trading alerts and real broker accounts.** Point a TradingView alert, a Zapier zap, an AI agent, or anything that can send a webhook at your own deployment. It parses the alert, runs it through risk rails that are on by default, places the order at your broker with your own keys, and records the entire story locally.
 
-This is the category the paid middlemen charge $49 to $99 a month for. It is structurally a simple job: receive a message, check it, forward an order. So here it is as MIT-licensed infrastructure. No subscription, no per-signal fee, no hosted service holding your keys, no telemetry. trade-relay is a [LuxAlgo](https://luxalgo.com) open-source project and this is the official repository.
+This is the category the paid middlemen charge $49 to $99 a month for. It is structurally a simple job: receive a message, check it, forward an order. So here it is as MIT-licensed infrastructure. No subscription, no per-signal fee, no hosted service holding your keys, no telemetry. Trade Relay is a [LuxAlgo](https://luxalgo.com) open-source project and this is the official repository.
 
 ## Five minutes to a filled order
 
@@ -84,7 +84,7 @@ The incumbents were built for TradingView alerts. This is built for TradingView 
 
 ## Brokers
 
-All broker connectivity goes through [`@luxalgo/broker-sdk`](https://github.com/LuxAlgo/broker-sdk), the open-source broker layer. trade-relay never speaks a broker's REST dialect itself, and it never emulates a missing capability against a real account.
+All broker connectivity goes through [`@luxalgo/broker-sdk`](https://github.com/LuxAlgo/broker-sdk), the open-source broker layer. Trade Relay never speaks a broker's REST dialect itself, and it never emulates a missing capability against a real account.
 
 | Account | Status |
 | --- | --- |
@@ -110,7 +110,7 @@ No hosted version: the moment someone else hosts your keys and fires your orders
 
 ## Disclaimer
 
-trade-relay executes instructions you configure. It never recommends trades and nothing here is financial advice. Trading involves substantial risk of loss. You operate this software, your broker relationship is yours, and you are responsible for what your deployment does. No warranty; see [LICENSE](LICENSE).
+Trade Relay executes instructions you configure. It never recommends trades and nothing here is financial advice. Trading involves substantial risk of loss. You operate this software, your broker relationship is yours, and you are responsible for what your deployment does. No warranty; see [LICENSE](LICENSE).
 
 ---
 
