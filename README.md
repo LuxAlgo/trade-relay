@@ -17,14 +17,14 @@
   &nbsp;·&nbsp;
   <a href="docs/mcp.md"><b>AI agents</b></a>
   &nbsp;·&nbsp;
-  <a href="docs/migrate-traderspost.md"><b>Leave TradersPost</b></a>
+  <a href="docs/migrate-traderspost.md"><b>Migrate from TradersPost</b></a>
   &nbsp;·&nbsp;
-  <a href="docs/migrate-signalstack.md"><b>Leave SignalStack</b></a>
+  <a href="docs/migrate-signalstack.md"><b>Migrate from SignalStack</b></a>
 </p>
 
 **Trade Relay is a self-hosted relay between trading alerts and real broker accounts.** Point a TradingView alert, a Zapier zap, an AI agent, or anything that can send a webhook at your own deployment. It parses the alert, runs it through risk rails that are on by default, places the order at your broker with your own keys, and records the entire story locally.
 
-This is the category the paid middlemen charge $49 to $99 a month for. It is structurally a simple job: receive a message, check it, forward an order. So here it is as MIT-licensed infrastructure. No subscription, no per-signal fee, no hosted service holding your keys, no telemetry. Trade Relay is a [LuxAlgo](https://luxalgo.com) open-source project and this is the official repository.
+It runs as one small Node process with a single SQLite file: no external services, no account with anyone, no telemetry. Trade Relay is a [LuxAlgo](https://luxalgo.com) open-source project and this is the official repository.
 
 ## Five minutes to a filled order
 
@@ -52,7 +52,7 @@ Running from a clone instead: `pnpm install && pnpm build`, then `node dist/cli.
 
 ## The rails are the product
 
-Nobody else in this category treats safety as the feature. Every rail below is enforced by the engine, ships on, and can only be loosened by a flag whose name admits what it does. A config that neither sets a rail nor loosens it fails to boot.
+Every rail below is enforced by the engine, ships on, and can only be loosened by a flag whose name admits what it does. A config that neither sets a rail nor loosens it fails to boot.
 
 | Rail | Default behavior |
 | --- | --- |
@@ -70,7 +70,7 @@ The kill switch is a dashboard button, an API call, a webhook payload (`{"action
 
 The native format covers most needs in one JSON shape: actions (`buy`, `sell`, `close`, `flatten`, `cancel_all`, `kill`), four sizing modes (quantity, currency amount, percent of equity, risk percent), order types up to trailing stops and take-profit/stop-loss brackets, idempotency keys. Reference: [docs/payload.md](docs/payload.md).
 
-Migrating from a paid relay means changing one URL. TradersPost-format payloads (`ticker`, `action`, `sentiment`, object-shaped exits) and SignalStack-style JSON and plain text (`BUY 10 AAPL`) are detected and honored as-is.
+Already sending alerts somewhere else? Migration is changing one URL. TradersPost-format payloads (`ticker`, `action`, `sentiment`, object-shaped exits) and SignalStack-style JSON and plain text (`BUY 10 AAPL`) are detected and honored as-is.
 
 ## Built for agents, not just alerts
 
@@ -80,7 +80,7 @@ The relay is also an MCP server. Claude or any MCP client can read positions, re
 { "mcpServers": { "trade-relay": { "command": "npx", "args": ["trade-relay", "mcp"] } } }
 ```
 
-The incumbents were built for TradingView alerts. This is built for TradingView alerts and for the agents that come after them: [docs/mcp.md](docs/mcp.md).
+Built for TradingView alerts, and for the agents that come after them: [docs/mcp.md](docs/mcp.md).
 
 ## Brokers
 
@@ -102,7 +102,7 @@ A single Node process (22.13 or newer) and one SQLite file. Docker image and com
 
 ## What it refuses to do
 
-No hosted version: the moment someone else hosts your keys and fires your orders, the middleman is back. No custody, keys live in your environment. No strategy advice, it executes what it is told. No unofficial broker APIs, which is why there is no Robinhood. No telemetry, and the absence is the feature.
+No hosted version: your keys and your orders stay on infrastructure you control. No custody, keys live in your environment. No strategy advice, it executes what it is told. No unofficial broker APIs, which is why there is no Robinhood. No telemetry, and the absence is the feature.
 
 ## Contributing
 
