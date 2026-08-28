@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  # Required for npm provenance attestations.
+  # Required for npm trusted publishing (OIDC) and provenance attestations.
   id-token: write
 
 jobs:
@@ -19,13 +19,15 @@ jobs:
           version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 24 ships npm 11.5.1+, required for trusted publishing (OIDC).
+          # Node 22's npm 10 silently falls back to token auth and fails.
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build
       - run: node scripts/check-licenses.mjs
+      # No NODE_AUTH_TOKEN: npm uses OIDC trusted publishing (configured in the
+      # package settings on npmjs.com), which also generates provenance.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
