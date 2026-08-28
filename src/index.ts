@@ -26,4 +26,6 @@ export { createRelayServer } from "./server.js";
 export type { ServerDeps } from "./server.js";
 export { createMcpServer } from "./mcp.js";
 export type { McpDeps } from "./mcp.js";
+export { tradeStatsForPort } from "./account-stats.js";
+export type { AccountTradeStats } from "./account-stats.js";
 export { VERSION } from "./version.js";

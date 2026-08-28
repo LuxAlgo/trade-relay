@@ -286,6 +286,17 @@ export const createSimulator = (options: SimulatorOptions): SimulatorPort => {
       return { equity: Number(value.toFixed(2)), currency: options.currency, cash: Number(cash.toFixed(2)) };
     },
 
+    getTrades: async () =>
+      [...orders.values()]
+        .filter((order) => order.status === "filled" && order.filledAvgPrice !== undefined && order.filledQuantity > 0)
+        .map((order) => ({
+          symbol: order.symbol,
+          side: order.side,
+          quantity: order.filledQuantity,
+          price: order.filledAvgPrice!,
+          ...(order.submittedAt ? { executedAt: order.submittedAt } : {}),
+        })),
+
     updatePrice: (symbol, price) => {
       prices.set(symbol, price);
       return sweep(symbol, price);

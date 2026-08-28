@@ -122,6 +122,16 @@ export type PortPosition = {
   averageEntryPrice?: number;
 };
 
+/** A fill, in the shape broker-sdk's stats engine consumes. */
+export type PortTrade = {
+  symbol: string;
+  side: "buy" | "sell";
+  quantity: number;
+  price: number;
+  fee?: number;
+  executedAt?: string;
+};
+
 /** The complete story of one signal, as the flight recorder keeps it. */
 export type SignalRecord = {
   id: string;

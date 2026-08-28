@@ -1,4 +1,4 @@
-import type { BracketSpec, OrderKind, PortOrder, PortPosition, TimeInForce } from "../types.js";
+import type { BracketSpec, OrderKind, PortOrder, PortPosition, PortTrade, TimeInForce } from "../types.js";
 
 /*
   BrokerPort is the one seam between the relay and the outside world. All
@@ -50,6 +50,11 @@ export type BrokerPort = {
   cancelAllOrders: () => Promise<number>;
   getPositions: () => Promise<PortPosition[]>;
   getEquity: () => Promise<PortEquity>;
+  /**
+   * Fill history for the stats engine, where the broker (or simulator) can
+   * provide it. Absent means stats are simply unavailable for the account.
+   */
+  getTrades?: () => Promise<PortTrade[]>;
   /**
    * Price advance hook. The simulator uses it to trigger resting orders
    * (stops, limits, bracket legs) and returns the orders it filled; real

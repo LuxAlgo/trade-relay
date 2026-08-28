@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { BrokerConnection } from "@luxalgo/broker-sdk";
+import { tradeStatsForPort } from "./account-stats.js";
 import type { RelayConfig } from "./config.js";
 import type { Engine } from "./engine.js";
 import type { StorageDriver } from "./storage/driver.js";
@@ -66,8 +67,12 @@ export const createMcpServer = (deps: McpDeps): McpServer => {
       const accounts: unknown[] = [];
       for (const port of engine.ports.values()) {
         try {
-          const [equity, positions] = await Promise.all([port.getEquity(), port.getPositions()]);
-          accounts.push({ id: port.id, broker: port.broker, environment: port.environment, ...equity, positions });
+          const [equity, positions, stats] = await Promise.all([
+            port.getEquity(),
+            port.getPositions(),
+            tradeStatsForPort(port),
+          ]);
+          accounts.push({ id: port.id, broker: port.broker, environment: port.environment, ...equity, positions, ...(stats ? { stats } : {}) });
         } catch (error) {
           accounts.push({ id: port.id, broker: port.broker, error: (error as Error).message });
         }

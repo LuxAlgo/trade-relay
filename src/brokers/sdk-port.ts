@@ -154,5 +154,9 @@ export const createSdkPort = (options: SdkPortOptions): BrokerPort => {
         ...(current.cash !== undefined ? { cash: current.cash } : {}),
       };
     },
+
+    // The read layer already returns normalized fills; the stats engine
+    // consumes them directly. Only where reads work (not Tradier sandbox).
+    ...(options.broker === "alpaca" ? { getTrades: async () => (await account()).trades } : {}),
   };
 };

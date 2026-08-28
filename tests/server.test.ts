@@ -127,6 +127,16 @@ describe("dashboard API", () => {
     expect((await fetch(`${base}/health`)).status).toBe(200);
   });
 
+  it("account stats appear after a round trip", async () => {
+    await post(`/webhook/${TOKEN}`, { action: "buy", symbol: "AAPL", quantity: 2, price: 150, signalId: "stats-open" });
+    await post(`/webhook/${TOKEN}`, { action: "close", symbol: "AAPL", price: 160, signalId: "stats-close" });
+    const accounts = (await (await authed("/api/accounts")).json()) as { id: string; stats?: { closedTrades: number; realizedPnl: number } }[];
+    const sim = accounts.find((account) => account.id === "sim");
+    expect(sim?.stats).toBeDefined();
+    expect(sim!.stats!.closedTrades).toBeGreaterThanOrEqual(1);
+    expect(sim!.stats!.realizedPnl).toBeGreaterThan(0);
+  });
+
   it("serves the dashboard shell", async () => {
     const response = await fetch(`${base}/`);
     expect(response.status).toBe(200);

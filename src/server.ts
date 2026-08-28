@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { BrokerConnection } from "@luxalgo/broker-sdk";
+import { computeTradeStats } from "@luxalgo/broker-sdk/stats";
+import { tradeStatsForPort } from "./account-stats.js";
 import type { RelayConfig } from "./config.js";
 import type { Engine } from "./engine.js";
 import type { StorageDriver } from "./storage/driver.js";
@@ -169,8 +171,20 @@ export const createRelayServer = (deps: ServerDeps): Server => {
       const accounts: unknown[] = [];
       for (const port of engine.ports.values()) {
         try {
-          const [equity, positions] = await Promise.all([port.getEquity(), port.getPositions()]);
-          accounts.push({ id: port.id, broker: port.broker, environment: port.environment, mode: "execute", ...equity, positions });
+          const [equity, positions, stats] = await Promise.all([
+            port.getEquity(),
+            port.getPositions(),
+            tradeStatsForPort(port),
+          ]);
+          accounts.push({
+            id: port.id,
+            broker: port.broker,
+            environment: port.environment,
+            mode: "execute",
+            ...equity,
+            positions,
+            ...(stats ? { stats } : {}),
+          });
         } catch (error) {
           accounts.push({ id: port.id, broker: port.broker, environment: port.environment, mode: "execute", error: (error as Error).message });
         }
@@ -178,7 +192,16 @@ export const createRelayServer = (deps: ServerDeps): Server => {
       for (const [id, reader] of watchReaders) {
         try {
           const snapshot = await reader.fetchSnapshot();
-          accounts.push({ id, broker: reader.broker, mode: "watch", accounts: snapshot.accounts });
+          const stats = computeTradeStats(snapshot.accounts.flatMap((account) => account.trades));
+          accounts.push({
+            id,
+            broker: reader.broker,
+            mode: "watch",
+            accounts: snapshot.accounts,
+            ...(stats && stats.closedTrades > 0
+              ? { stats: { closedTrades: stats.closedTrades, wins: stats.wins, losses: stats.losses, winRate: stats.winRate, realizedPnl: Number(stats.realizedPnl.toFixed(2)) } }
+              : {}),
+          });
         } catch (error) {
           accounts.push({ id, broker: reader.broker, mode: "watch", error: (error as Error).message });
         }

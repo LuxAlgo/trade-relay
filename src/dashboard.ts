@@ -32,6 +32,7 @@ button:hover{border-color:var(--dim)}
 .card .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
 .card .v{font:600 22px var(--mono);margin-top:2px}
 .card .s{color:var(--dim);font-size:12px;margin-top:4px}
+.pnl-up{color:var(--green)}.pnl-down{color:var(--red)}
 .env{font:11px var(--mono);padding:1px 7px;border-radius:6px;margin-left:8px;vertical-align:2px}
 .env.paper,.env.simulated,.env.sandbox{background:#173a2c;color:var(--green)}
 .env.live{background:#3a1720;color:var(--red)}
@@ -127,9 +128,9 @@ async function tick(){
     if(fe.options.length===1)for(const e of st.endpoints){const o=document.createElement("option");o.textContent=e.id;fe.appendChild(o)}
     const accs=await api("/api/accounts");
     $("#accounts").innerHTML=accs.map(a=>{
-      if(a.mode==="watch"){const eq=(a.accounts||[]).reduce((s,x)=>s+(x.equity||0),0);return card(a.id+" (watch)",a.error?"—":fmt(eq),a.error||a.broker)}
+      if(a.mode==="watch"){const eq=(a.accounts||[]).reduce((s,x)=>s+(x.equity||0),0);return card(a.id+" (watch)",a.error?"—":fmt(eq),a.error||a.broker,null,a.stats)}
       const pos=(a.positions||[]).length;
-      return card(a.id,a.error?"—":fmt(a.equity)+" "+(a.currency||""),(a.error||a.broker+" · "+pos+" position"+(pos===1?"":"s")),a.environment)
+      return card(a.id,a.error?"—":fmt(a.equity)+" "+(a.currency||""),(a.error||a.broker+" · "+pos+" position"+(pos===1?"":"s")),a.environment,a.stats)
     }).join("");
     const q=new URLSearchParams({limit:"60"});
     if($("#fstatus").value)q.set("status",$("#fstatus").value);
@@ -141,7 +142,14 @@ async function tick(){
     for(const s of sigs)if(open.has(s.id)){const el=document.getElementById("story-"+s.id);if(el)el.classList.add("open")}
   }catch(e){/* token box already shown on 401 */}
 }
-function card(k,v,s,env){return '<div class="card"><div class="k">'+esc(k)+(env?'<span class="env '+esc(env)+'">'+esc(env)+"</span>":"")+'</div><div class="v">'+esc(v)+'</div><div class="s">'+esc(s)+"</div></div>"}
+function card(k,v,s,env,st){
+  let stat="";
+  if(st&&st.closedTrades){
+    const up=st.realizedPnl>=0;
+    stat='<div class="s"><span class="'+(up?"pnl-up":"pnl-down")+'">'+(up?"+":"")+fmt(st.realizedPnl)+' realized</span>'+(st.winRate!=null?' · '+Math.round(st.winRate*100)+'% win':'')+' · '+st.closedTrades+' closed</div>';
+  }
+  return '<div class="card"><div class="k">'+esc(k)+(env?'<span class="env '+esc(env)+'">'+esc(env)+"</span>":"")+'</div><div class="v">'+esc(v)+'</div><div class="s">'+esc(s)+"</div>"+stat+"</div>"
+}
 function sigLabel(s){if(!s.signal)return "—";const g=s.signal;return (g.action||"?").toUpperCase()+(g.symbol?" "+g.symbol:"")}
 function ordLabel(s){const o=s.order;if(!o)return s.orders&&s.orders.length?s.orders.length+" order"+(s.orders.length===1?"":"s"):"—";return o.status+(o.filledAvgPrice?" @ "+fmt(o.filledAvgPrice):"")}
 function row(s){

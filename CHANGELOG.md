@@ -13,6 +13,7 @@ Initial public release.
 - Broker connectivity via @luxalgo/broker-sdk: Alpaca (paper, and live behind the SDK's acknowledgement sentence), Tradier sandbox, and a built-in simulator with the full order vocabulary (stops, stop-limits, trailing stops, OCO brackets)
 - Watch-only portfolio accounts over the broker-sdk read layer
 - Flight recorder on node:sqlite with a local dashboard and one-click replay
+- Per-account trade stats (realized PnL, win rate, closed round trips) on the dashboard cards, REST API, and MCP, computed by broker-sdk's stats engine
 - MCP server for AI agents: read-only by default, trading gated behind mcp.allowTrading, all agent orders pass the same risk rails
 - Outbound notifications: Discord, Slack, Telegram, generic webhook
 - CLI (init, start, mcp, simulate), Docker image, docker compose, Railway template
