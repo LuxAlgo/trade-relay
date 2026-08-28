@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="Trade Relay. Alerts in. Orders out. Your server, your keys, your rails." width="100%"/>
+  <img src="docs/assets/hero.svg" alt="Trade Relay, a LuxAlgo open source project. Alert to rails to order. Your server, your keys, your rails." width="100%"/>
 </p>
 
 <p align="center">
