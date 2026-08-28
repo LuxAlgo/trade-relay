@@ -15,5 +15,6 @@ Initial public release.
 - Flight recorder on node:sqlite with a local dashboard and one-click replay
 - Per-account trade stats (realized PnL, win rate, closed round trips) on the dashboard cards, REST API, and MCP, computed by broker-sdk's stats engine
 - MCP server for AI agents: read-only by default, trading gated behind mcp.allowTrading, all agent orders pass the same risk rails
+- Scoped agent token for hosted agents and integrations: a second revocable API key, read-only by default with an explicit "trade" opt-in; any scope may turn the kill switch on, only trade scope may turn it off
 - Outbound notifications: Discord, Slack, Telegram, generic webhook
 - CLI (init, start, mcp, simulate), Docker image, docker compose, Railway template

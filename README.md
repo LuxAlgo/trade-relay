@@ -80,7 +80,7 @@ The relay is also an MCP server. Claude or any MCP client can read positions, re
 { "mcpServers": { "trade-relay": { "command": "npx", "args": ["trade-relay", "mcp"] } } }
 ```
 
-Built for TradingView alerts, and for the agents that come after them: [docs/mcp.md](docs/mcp.md).
+For hosted agents and integrations there is a separate **agent token**: a revocable key with a scope you control, read-only by default, so your master token never leaves your hands. Built for TradingView alerts, and for the agents that come after them: [docs/mcp.md](docs/mcp.md).
 
 ## Brokers
 

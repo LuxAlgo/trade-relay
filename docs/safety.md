@@ -37,6 +37,7 @@ While killed, nothing places orders — deliberately including exits, because "s
 - The URL itself carries a secret token (min 16 chars; `init` generates 48-hex ones). Compared timing-safe. Unknown tokens get an anonymous 404.
 - Optional per-endpoint HMAC: set `hmacSecret` and send `X-Signature: sha256=<hex hmac of raw body>` — for senders that support it (TradingView doesn't; the token URL is the TradingView-compatible layer).
 - The dashboard/API require a Bearer token (`server.dashboardToken`); without one configured they answer loopback callers only.
+- A second, scoped `server.agentToken` exists to hand to agents and integrations: read-only by default (`agentTokenScope: "read"`), it can inspect everything and turn the kill switch ON but never trade; the operator may widen it to `"trade"`. Rotate the value to revoke. The dashboard token never needs to leave your hands.
 - Payload bodies are capped (256 KB) and stored truncated at 64 KB.
 
 ## Live trading

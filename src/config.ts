@@ -145,8 +145,21 @@ export const configSchema = z
       .object({
         host: z.string().default("0.0.0.0"),
         port: z.number().int().min(1).max(65535).default(8484),
-        /** Bearer token for the dashboard and REST API. */
+        /** Bearer token for the dashboard and REST API (full control). */
         dashboardToken: z.string().min(16).optional(),
+        /**
+         * A second, scoped Bearer token to hand to agents and integrations
+         * (e.g. a hosted MCP) instead of the dashboard token. Revoke it by
+         * rotating the value; the dashboard token is never exposed.
+         */
+        agentToken: z.string().min(16).optional(),
+        /**
+         * What the agent token may do. "read": inspect everything, and turn
+         * the kill switch ON (stopping is always safe). "trade": also place
+         * orders through the rails, replay, flatten, resume. Read-only by
+         * default; only the operator widens it.
+         */
+        agentTokenScope: z.enum(["read", "trade"]).default("read"),
         /** Trust X-Forwarded-For from a reverse proxy for source IPs. */
         trustProxyHeader: z.boolean().default(false),
       })
@@ -174,6 +187,13 @@ export const configSchema = z
       .default({}),
   })
   .superRefine((config, ctx) => {
+    if (config.server.agentToken !== undefined && config.server.agentToken === config.server.dashboardToken) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["server", "agentToken"],
+        message: "agentToken must differ from dashboardToken — its whole point is to be the key you can hand out and revoke",
+      });
+    }
     const accountIds = new Set(config.accounts.map((account) => account.id));
     if (accountIds.size !== config.accounts.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["accounts"], message: "account ids must be unique" });

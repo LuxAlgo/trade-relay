@@ -85,11 +85,36 @@ export const createRelayServer = (deps: ServerDeps): Server => {
     return request.socket.remoteAddress ?? "unknown";
   };
 
-  const apiAuthorized = (request: IncomingMessage): boolean => {
-    const token = config.server.dashboardToken;
-    if (!token) return isLoopback(request);
+  /*
+    Two keys open the API. The dashboard token is the master key ("admin").
+    The agent token is the one you hand to integrations and hosted agents:
+    read-only unless the operator set agentTokenScope to "trade". One
+    deliberate asymmetry mirrors the MCP surface: any authenticated caller
+    may turn the kill switch ON (stopping is always safe); turning it OFF,
+    resuming, replaying, and flattening need the trade scope or the master
+    key.
+  */
+  type ApiScope = "admin" | "read" | "trade";
+
+  const apiScope = (request: IncomingMessage): ApiScope | null => {
     const header = request.headers.authorization ?? "";
-    return header.startsWith("Bearer ") && equalSecret(header.slice(7), token);
+    const bearer = header.startsWith("Bearer ") ? header.slice(7) : undefined;
+    if (bearer !== undefined) {
+      if (config.server.dashboardToken && equalSecret(bearer, config.server.dashboardToken)) return "admin";
+      if (config.server.agentToken && equalSecret(bearer, config.server.agentToken)) {
+        return config.server.agentTokenScope === "trade" ? "trade" : "read";
+      }
+      return null;
+    }
+    return config.server.dashboardToken ? null : isLoopback(request) ? "admin" : null;
+  };
+
+  const canTrade = (scope: ApiScope): boolean => scope !== "read";
+
+  const forbidden = (response: ServerResponse, action: string): void => {
+    json(response, 403, {
+      error: `the agent token is read-only — ${action} needs server.agentTokenScope: "trade" or the dashboard token`,
+    });
   };
 
   const handleWebhook = async (request: IncomingMessage, response: ServerResponse, token: string): Promise<void> => {
@@ -113,8 +138,9 @@ export const createRelayServer = (deps: ServerDeps): Server => {
   };
 
   const handleApi = async (request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> => {
-    if (!apiAuthorized(request)) {
-      json(response, 401, { error: "unauthorized — send Authorization: Bearer <dashboardToken>" });
+    const scope = apiScope(request);
+    if (!scope) {
+      json(response, 401, { error: "unauthorized — send Authorization: Bearer <dashboardToken or agentToken>" });
       return;
     }
     const path = url.pathname;
@@ -158,6 +184,10 @@ export const createRelayServer = (deps: ServerDeps): Server => {
 
     const replayMatch = path.match(/^\/api\/signals\/([0-9a-f-]+)\/replay$/);
     if (method === "POST" && replayMatch) {
+      if (!canTrade(scope)) {
+        forbidden(response, "replaying a signal");
+        return;
+      }
       const body = await readBody(request);
       const options = body ? (JSON.parse(body) as { account?: string }) : {};
       const record = await engine.replay(replayMatch[1]!, {
@@ -224,23 +254,37 @@ export const createRelayServer = (deps: ServerDeps): Server => {
 
     if (method === "POST" && path === "/api/kill") {
       const body = JSON.parse((await readBody(request)) || "{}") as { on?: boolean; reason?: string };
-      engine.setKillSwitch(body.on ?? true, body.reason ?? "dashboard");
+      const on = body.on ?? true;
+      if (!on && !canTrade(scope)) {
+        forbidden(response, "turning the kill switch OFF");
+        return;
+      }
+      engine.setKillSwitch(on, body.reason ?? "dashboard");
       json(response, 200, engine.status().killSwitch);
       return;
     }
 
     if (method === "POST" && path === "/api/pause") {
       const body = JSON.parse((await readBody(request)) || "{}") as { endpoint?: string; paused?: boolean };
+      const paused = body.paused ?? true;
+      if (!paused && !canTrade(scope)) {
+        forbidden(response, "resuming an endpoint");
+        return;
+      }
       if (!body.endpoint || !config.endpoints.some((endpoint) => endpoint.id === body.endpoint)) {
         json(response, 400, { error: "unknown endpoint" });
         return;
       }
-      engine.setPaused(body.endpoint, body.paused ?? true);
+      engine.setPaused(body.endpoint, paused);
       json(response, 200, { ok: true });
       return;
     }
 
     if (method === "POST" && path === "/api/flatten") {
+      if (!canTrade(scope)) {
+        forbidden(response, "flattening an account");
+        return;
+      }
       const body = JSON.parse((await readBody(request)) || "{}") as { account?: string };
       const accountId = body.account ?? config.endpoints[0]?.account ?? "";
       json(response, 200, await engine.flattenAll(accountId));
