@@ -33,7 +33,7 @@ Railway detects the Dockerfile. Two clicks:
 ## A laptop + a tunnel (fully local)
 
 ```bash
-npx trade-relay start
+npx @luxalgo/trade-relay start
 # in another terminal, any tunnel you like:
 ngrok http 8484                        # or:
 cloudflared tunnel --url http://localhost:8484

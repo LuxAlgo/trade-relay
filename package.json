@@ -1,5 +1,5 @@
 {
-  "name": "trade-relay",
+  "name": "@luxalgo/trade-relay",
   "version": "0.1.0",
   "description": "Open-source execution relay for trading alerts. Point TradingView (or anything that can send a webhook, or an AI agent over MCP) at your own deployment and it places the matching order at your broker — safety rails on by default, a full flight recorder, your keys never leave your server.",
   "license": "MIT",

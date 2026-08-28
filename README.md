@@ -30,8 +30,8 @@ It runs as one small Node process with a single SQLite file: no external service
 
 ```bash
 mkdir my-relay && cd my-relay
-npx trade-relay init     # config + generated secrets
-npx trade-relay start    # webhook + dashboard on :8484
+npx @luxalgo/trade-relay init     # config + generated secrets
+npx @luxalgo/trade-relay start    # webhook + dashboard on :8484
 ```
 
 Paste this into a TradingView alert message and point the alert at your webhook URL:
