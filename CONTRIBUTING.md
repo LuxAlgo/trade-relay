@@ -27,4 +27,4 @@ Every commit needs a Developer Certificate of Origin sign-off (`git commit -s`),
 
 ## Security
 
-Anything exploitable goes to **security@luxalgo.com**, not the issue tracker — see [SECURITY.md](SECURITY.md).
+Anything exploitable goes to **business@luxalgo.com** (subject "SECURITY"), not the issue tracker — see [SECURITY.md](SECURITY.md).

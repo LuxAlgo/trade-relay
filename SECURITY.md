@@ -4,8 +4,9 @@ trade-relay touches money. We treat every report seriously.
 
 ## Reporting a vulnerability
 
-Email **security@luxalgo.com** with a description and, where possible, a
-reproduction. Please do not open a public issue for anything exploitable.
+Email **business@luxalgo.com** with the subject line "SECURITY" plus a
+description and, where possible, a reproduction. Please do not open a
+public issue for anything exploitable.
 
 You can expect an acknowledgement within 72 hours. We will keep you informed
 as we validate and fix, and we will credit you in the release notes unless you
