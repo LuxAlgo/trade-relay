@@ -17,7 +17,8 @@ export const renderDashboard = (version: string): string => `<!doctype html>
 *{box-sizing:border-box;margin:0}
 body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px;max-width:1200px;margin:0 auto}
 header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
-h1{font-size:18px;font-weight:650;letter-spacing:.2px}
+h1{font-size:18px;font-weight:650;letter-spacing:.2px;display:flex;align-items:center;gap:10px}
+h1 .mark{height:22px;width:auto;flex:none;color:var(--text)}
 h1 span{color:var(--dim);font-weight:400}
 .pill{font:12px var(--mono);padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
 .spacer{flex:1}
@@ -65,7 +66,15 @@ a{color:var(--blue);text-decoration:none}
 </head>
 <body>
 <header>
-  <h1>trade-relay <span>flight recorder</span></h1>
+  <h1>
+    <!-- The LuxAlgo mark: a trademark of LuxAlgo Global, LLC (see TRADEMARKS.md), giving the brand its visual credit next to the product name. -->
+    <svg class="mark" viewBox="38 46 592 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LuxAlgo">
+      <path d="M307.671 453.166H185.058C183.517 453.166 182.555 451.497 183.327 450.164L411.001 56.9083C411.773 55.575 410.811 53.9062 409.27 53.9062H277.303C276.59 53.9062 275.93 54.2866 275.573 54.9042L45.5399 452.233C45.2029 452.816 45.1811 453.528 45.4819 454.13L96.9814 557.129C97.3202 557.806 98.0127 558.234 98.7702 558.234H545.98C547.493 558.234 548.458 556.619 547.741 555.286L403.955 288.256C403.208 286.868 401.224 286.85 400.451 288.224L354.952 369.111L343.131 390.125" stroke="currentColor" stroke-width="24" stroke-linejoin="round"/>
+      <path d="M412.745 53.9062L621.765 440.592C622.455 441.868 622.399 443.418 621.621 444.642L549.334 558.234" stroke="currentColor" stroke-width="24" stroke-linejoin="round"/>
+      <path d="M225.797 453.562H425.625" stroke="currentColor" stroke-width="24" stroke-linejoin="round"/>
+    </svg>
+    Trade Relay <span>flight recorder</span>
+  </h1>
   <span class="pill" id="ver">v${version}</span>
   <span class="pill" id="up">–</span>
   <div class="spacer"></div>
