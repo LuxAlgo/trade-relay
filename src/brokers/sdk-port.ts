@@ -1,4 +1,4 @@
-import { connect, type BrokerSnapshot } from "@luxalgo/broker-sdk";
+import { connect, supportsBars, type BrokerSnapshot } from "@luxalgo/broker-sdk";
 import { connectTrading, type TradingConnection } from "@luxalgo/broker-sdk/orders";
 import type { PortBar, PortBarRequest, PortOrder, PortPosition } from "../types.js";
 import { UnsupportedOrderError, type BrokerPort, type PortCapabilities, type PortEquity, type PortOrderRequest } from "./port.js";
@@ -19,7 +19,12 @@ import { UnsupportedOrderError, type BrokerPort, type PortCapabilities, type Por
   so the relay compiles against SDK versions from before and after it lands.
 */
 
-/** The bar capability broker-sdk is growing; optional until its release ships. */
+/**
+ * broker-sdk's bar capability (0.5.0+). Every SDK connection carries the
+ * method and throws UnsupportedCapabilityError where the broker has no
+ * market-data endpoints, so presence alone proves nothing: the port asks
+ * supportsBars(broker) first and only then looks for the method.
+ */
 type BarsCapable = {
   fetchBars?: (symbol: string, request: { timeframe: string; from?: number; to?: number }) => Promise<PortBar[]>;
 };
@@ -87,7 +92,15 @@ export const createSdkPort = (options: SdkPortOptions): BrokerPort => {
   // sandbox reads are impossible today — rails that need positions or
   // equity fail closed with this message until the upstream ask lands.
   const reader = options.broker === "alpaca" ? connect({ broker: "alpaca", credentials: options.credentials }) : undefined;
-  const bars = barsCapability(reader, trading);
+
+  // Bars ride the SDK's read connection. Tradier gets one for bars only: its
+  // market data is production-hosted, so a sandbox token yields no bars and
+  // the tape falls back to the fill path rather than inventing candles.
+  const barsReader =
+    options.broker === "tradier"
+      ? connect({ broker: "tradier", credentials: { accessToken: options.credentials.accessToken } })
+      : reader;
+  const bars = supportsBars(options.broker) ? barsCapability(barsReader, trading) : undefined;
   const ttl = options.broker === "alpaca" && options.snapshotTtlMs !== undefined ? options.snapshotTtlMs : 3000;
 
   let cached: { snapshot: BrokerSnapshot; at: number } | undefined;
