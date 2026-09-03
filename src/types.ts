@@ -122,6 +122,25 @@ export type PortPosition = {
   averageEntryPrice?: number;
 };
 
+/** One OHLC bar; `time` is the bar's open time in epoch milliseconds. */
+export type PortBar = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
+/** What the tape asks a port for. Only 1-minute bars are requested today. */
+export type PortBarRequest = {
+  timeframe: "1m";
+  /** Oldest bar open time wanted, epoch ms (inclusive). */
+  from?: number;
+  /** Newest bar open time wanted, epoch ms (inclusive). */
+  to?: number;
+};
+
 /** A fill, in the shape broker-sdk's stats engine consumes. */
 export type PortTrade = {
   symbol: string;

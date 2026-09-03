@@ -35,10 +35,11 @@ const config = parseConfig({
 
 let server: Server;
 let base: string;
+let engine: ReturnType<typeof createEngine>;
 
 beforeAll(async () => {
   const storage = createMemoryStorage();
-  const engine = createEngine({ config, storage, ports: createPorts(config), notifier: { send: () => {} } });
+  engine = createEngine({ config, storage, ports: createPorts(config), notifier: { send: () => {} } });
   server = createRelayServer({ config, engine, storage, watchReaders: new Map(), version: "test" });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -173,7 +174,7 @@ describe("the tape API", () => {
     expect((await fetch(`${base}/api/tape/AAPL`)).status).toBe(401);
   });
 
-  it("lists symbols with fills, then the fills, FIFO pairs and no invented bars", async () => {
+  it("lists symbols with fills, then the fills, FIFO pairs and the simulator's bars", async () => {
     await post(`/webhook/${TOKEN}`, { action: "buy", symbol: "AAPL", quantity: 3, price: 120, signalId: "tape-open" });
     await post(`/webhook/${TOKEN}`, { action: "sell", symbol: "AAPL", quantity: 3, price: 126, signalId: "tape-close" });
 
@@ -192,9 +193,9 @@ describe("the tape API", () => {
       fills: { signalId: string; side: string; quantity: number; price: number; at: string; endpointId: string; accountId: string; orderId: string }[];
       pairs: { entrySignalId: string; exitSignalId: string; entryPrice: number; exitPrice: number; quantity: number; pnl: number }[];
       realizedPnl: number;
-      bars: unknown;
+      bars: { time: number; open: number; high: number; low: number; close: number }[] | null;
       barsSource: string;
-      barsTimeframe: unknown;
+      barsTimeframe: string | null;
     };
     expect(tape.symbol).toBe("AAPL");
     const open = tape.fills.find((fill) => fill.price === 120 && fill.side === "buy");
@@ -208,9 +209,29 @@ describe("the tape API", () => {
     expect(story.status).toBe(200);
     const pair = tape.pairs.find((candidate) => candidate.exitSignalId === close!.signalId && candidate.entrySignalId === open!.signalId);
     expect(pair).toMatchObject({ quantity: 3, entryPrice: 120, exitPrice: 126, pnl: 18 });
-    expect(tape.bars).toBeNull();
-    expect(tape.barsSource).toBe("none");
-    expect(tape.barsTimeframe).toBeNull();
+    // The simulator is the price process, so its bars ride along and say so.
+    expect(tape.barsSource).toBe("simulator");
+    expect(tape.barsTimeframe).toBe("1m");
+    expect(tape.bars!.length).toBeGreaterThan(0);
+    const minute = 60_000;
+    const openBar = tape.bars!.find((bar) => bar.time === Math.floor(Date.parse(open!.at) / minute) * minute)!;
+    expect(openBar.low).toBeLessThanOrEqual(120);
+    expect(openBar.high).toBeGreaterThanOrEqual(120);
+    expect(tape.bars![0]!.time).toBeLessThanOrEqual(Date.parse(open!.at));
+    expect(tape.bars![tape.bars!.length - 1]!.time).toBeGreaterThanOrEqual(Date.parse(close!.at));
+  });
+
+  it("answers bars: null, barsSource: none when the account's port has no bar capability", async () => {
+    const port = engine.ports.get("sim")!;
+    const getBars = port.getBars;
+    delete (port as { getBars?: unknown }).getBars;
+    try {
+      const tape = (await (await authed("/api/tape/AAPL")).json()) as { bars: unknown; barsSource: string; barsTimeframe: unknown; fills: unknown[] };
+      expect(tape.fills.length).toBeGreaterThan(0);
+      expect(tape).toMatchObject({ bars: null, barsSource: "none", barsTimeframe: null });
+    } finally {
+      if (getBars) port.getBars = getBars;
+    }
   });
 
   it("filters by range and account, and rejects a malformed range", async () => {

@@ -15,6 +15,8 @@ export type { RiskInputs } from "./risk.js";
 export { resolveSizing, sizingNeedsEquity, SizingError } from "./sizing.js";
 export type { ResolvedSize, SizingContext } from "./sizing.js";
 export { createPorts, createWatchReaders, createSimulator, createSdkPort, UnsupportedOrderError } from "./brokers/index.js";
+export { simulatedBars } from "./brokers/simulated-bars.js";
+export type { PriceAnchor } from "./brokers/simulated-bars.js";
 export type { BrokerPort, PortCapabilities, PortEquity, PortOrderRequest, SimulatorPort } from "./brokers/index.js";
 export { createStorage, createSqliteStorage, createMemoryStorage } from "./storage/index.js";
 export type { StorageDriver, SignalQuery } from "./storage/index.js";

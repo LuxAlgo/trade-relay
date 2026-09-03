@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { BracketSpec, PortOrder, PortPosition } from "../types.js";
+import type { BracketSpec, PortBar, PortBarRequest, PortOrder, PortPosition } from "../types.js";
 import type { BrokerPort, PortCapabilities, PortEquity, PortOrderRequest } from "./port.js";
+import { simulatedBars, type PriceAnchor } from "./simulated-bars.js";
 
 /*
   The built-in simulator: a complete fake broker that fills against the
@@ -11,8 +12,11 @@ import type { BrokerPort, PortCapabilities, PortEquity, PortOrderRequest } from 
   write layer will grow into.
 
   Price model: the last price seen per symbol (a signal's reference price,
-  or an explicit updatePrice call). No candles, no slippage model — honest
-  paper, not pretend backtesting.
+  or an explicit updatePrice call). No slippage model — honest paper, not
+  pretend backtesting. Every price the simulator sees is kept with its
+  instant, and getBars draws that history as one-minute bars (see
+  simulated-bars.ts): the simulator is the price process, so these are its
+  own bars, not market data pretending to be real.
 */
 
 type SimPosition = { quantity: number; avgEntryPrice: number };
@@ -35,6 +39,8 @@ export type SimulatorOptions = {
   startingEquity: number;
   defaultFillPrice: number;
   currency: string;
+  /** Clock, injectable for deterministic tests. */
+  now?: () => Date;
 };
 
 export type SimulatorPort = BrokerPort & {
@@ -57,9 +63,17 @@ export const createSimulator = (options: SimulatorOptions): SimulatorPort => {
   const orders = new Map<string, SimOrder>();
   const byClientId = new Map<string, string>();
   const prices = new Map<string, number>();
+  const anchors = new Map<string, PriceAnchor[]>();
+  const now = options.now ?? (() => new Date());
+
+  /** Record that the simulator saw `price` for `symbol` right now. */
+  const mark = (symbol: string, price: number): void => {
+    prices.set(symbol, price);
+    anchors.set(symbol, [...(anchors.get(symbol) ?? []), { time: now().getTime(), price }]);
+  };
 
   const priceFor = (symbol: string, reference?: number): number => {
-    if (reference !== undefined) prices.set(symbol, reference);
+    if (reference !== undefined) mark(symbol, reference);
     return prices.get(symbol) ?? options.defaultFillPrice;
   };
 
@@ -82,6 +96,7 @@ export const createSimulator = (options: SimulatorOptions): SimulatorPort => {
     else positions.set(order.symbol, existing);
 
     cash -= signed * fillPrice;
+    if (prices.get(order.symbol) !== fillPrice) mark(order.symbol, fillPrice);
     order.status = "filled";
     order.filledQuantity = quantity;
     order.filledAvgPrice = fillPrice;
@@ -140,7 +155,7 @@ export const createSimulator = (options: SimulatorOptions): SimulatorPort => {
       ...(request.limitPrice !== undefined ? { limitPrice: request.limitPrice } : {}),
       ...(request.stopPrice !== undefined ? { stopPrice: request.stopPrice } : {}),
       filledQuantity: 0,
-      submittedAt: new Date().toISOString(),
+      submittedAt: now().toISOString(),
       timeInForce: request.timeInForce,
       ...(request.trailAmount !== undefined ? { trailAmount: request.trailAmount } : {}),
       ...(request.trailPercent !== undefined ? { trailPercent: request.trailPercent } : {}),
@@ -297,8 +312,11 @@ export const createSimulator = (options: SimulatorOptions): SimulatorPort => {
           ...(order.submittedAt ? { executedAt: order.submittedAt } : {}),
         })),
 
+    getBars: async (symbol: string, request: PortBarRequest): Promise<PortBar[]> =>
+      simulatedBars(symbol, anchors.get(symbol) ?? [], request),
+
     updatePrice: (symbol, price) => {
-      prices.set(symbol, price);
+      mark(symbol, price);
       return sweep(symbol, price);
     },
 

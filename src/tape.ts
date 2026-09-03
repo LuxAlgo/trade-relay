@@ -1,7 +1,7 @@
 import { matchRoundTrips } from "@luxalgo/broker-sdk/stats";
 import type { BrokerPort } from "./brokers/port.js";
 import type { StorageDriver } from "./storage/driver.js";
-import type { PortOrder, SignalRecord } from "./types.js";
+import type { PortBar, PortOrder, SignalRecord } from "./types.js";
 
 /*
   The tape: every fill the flight recorder holds, per symbol, in a shape a
@@ -57,7 +57,7 @@ export type TapeSymbolSummary = {
 /** Where the payload's bars came from. Grows one entry per broker that learns to serve bars. */
 export type TapeBarsSource = "none" | (string & {});
 
-export type TapeBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
+export type TapeBar = PortBar;
 
 export type TapeResponse = {
   symbol: string;
@@ -217,22 +217,36 @@ export type TapeRange = { from?: string | undefined; to?: string | undefined };
 const inRange = (fill: TapeFill, range: TapeRange): boolean =>
   (range.from === undefined || fill.at >= range.from) && (range.to === undefined || fill.at <= range.to);
 
+const NO_BARS = { bars: null, source: "none", timeframe: null } as const;
+
 /**
- * Bars for a symbol from the account's broker port. No port can provide any
- * today: neither the BrokerPort seam nor @luxalgo/broker-sdk exposes candles,
- * and the relay does not invent market data. When a port grows a bar
- * capability upstream, this is the one function to teach — the payload shape
- * (`bars`, `barsSource`, `barsTimeframe`) already carries it to the client.
+ * Bars for a symbol from the account's broker port, labelled by who drew
+ * them: "simulator" for the simulator's own price history, the broker id
+ * when @luxalgo/broker-sdk supplied them, "none" when the port has no bar
+ * capability (or it failed) — then the dashboard charts the fill path alone.
+ * The relay never fills the gap with bars of its own.
  */
 export const barsForPort = async (
-  _port: BrokerPort | undefined,
-  _symbol: string,
-  _range: TapeRange,
-): Promise<{ bars: TapeBar[] | null; source: TapeBarsSource; timeframe: string | null }> => ({
-  bars: null,
-  source: "none",
-  timeframe: null,
-});
+  port: BrokerPort | undefined,
+  symbol: string,
+  range: TapeRange,
+): Promise<{ bars: TapeBar[] | null; source: TapeBarsSource; timeframe: string | null }> => {
+  if (!port?.getBars) return NO_BARS;
+  try {
+    const from = range.from !== undefined ? Date.parse(range.from) : undefined;
+    const to = range.to !== undefined ? Date.parse(range.to) : undefined;
+    const bars = await port.getBars(symbol, {
+      timeframe: "1m",
+      ...(from !== undefined && !Number.isNaN(from) ? { from } : {}),
+      ...(to !== undefined && !Number.isNaN(to) ? { to } : {}),
+    });
+    if (bars.length === 0) return NO_BARS;
+    return { bars, source: port.broker, timeframe: "1m" };
+  } catch {
+    // A failing bar feed must not take the fills with it.
+    return NO_BARS;
+  }
+};
 
 /**
  * The tape for one symbol: the fills inside the range, their FIFO pairs,

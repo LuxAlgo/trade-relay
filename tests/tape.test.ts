@@ -118,10 +118,33 @@ describe("summarizeSymbols", () => {
 });
 
 describe("bars", () => {
-  it("no port can provide bars today, and none are invented", async () => {
+  it("come from the simulator's own price history, labelled as such", async () => {
     const sim = createSimulator({ id: "sim", startingEquity: 100_000, defaultFillPrice: 100, currency: "USD" });
-    expect(await barsForPort(sim, "AAPL", {})).toEqual({ bars: null, source: "none", timeframe: null });
+    await sim.placeOrder({ symbol: "AAPL", side: "buy", type: "market", quantity: 1, timeInForce: "day", clientOrderId: "a", referencePrice: 150 });
+    const result = await barsForPort(sim, "AAPL", {});
+    expect(result.source).toBe("simulator");
+    expect(result.timeframe).toBe("1m");
+    expect(result.bars!.length).toBeGreaterThan(0);
+    expect(result.bars![0]!.open).toBe(150);
+    // A symbol the simulator never priced has no bars, and says so.
+    expect(await barsForPort(sim, "SPY", {})).toEqual({ bars: null, source: "none", timeframe: null });
+  });
+
+  it("are none without a port, without a bar capability, or when the feed fails", async () => {
     expect(await barsForPort(undefined, "AAPL", {})).toEqual({ bars: null, source: "none", timeframe: null });
+    const bare = { ...createSimulator({ id: "sim", startingEquity: 100_000, defaultFillPrice: 100, currency: "USD" }) };
+    delete (bare as { getBars?: unknown }).getBars;
+    expect(await barsForPort(bare, "AAPL", {})).toEqual({ bars: null, source: "none", timeframe: null });
+    const failing = { ...bare, broker: "alpaca", getBars: async () => { throw new Error("feed down"); } };
+    expect(await barsForPort(failing, "AAPL", {})).toEqual({ bars: null, source: "none", timeframe: null });
+  });
+
+  it("passes the window through as epoch milliseconds", async () => {
+    const seen: unknown[] = [];
+    const port = { ...createSimulator({ id: "sim", startingEquity: 100_000, defaultFillPrice: 100, currency: "USD" }), broker: "alpaca", getBars: async (symbol: string, request: unknown) => { seen.push([symbol, request]); return [{ time: 1, open: 1, high: 1, low: 1, close: 1 }]; } };
+    const result = await barsForPort(port, "AAPL", { from: "2026-09-03T00:00:00.000Z", to: "2026-09-03T23:59:59.999Z" });
+    expect(result.source).toBe("alpaca");
+    expect(seen).toEqual([["AAPL", { timeframe: "1m", from: Date.parse("2026-09-03T00:00:00.000Z"), to: Date.parse("2026-09-03T23:59:59.999Z") }]]);
   });
 });
 
@@ -140,12 +163,14 @@ describe("buildTape over storage", () => {
     const fills = collectFills(storage, 3);
     expect(fills).toHaveLength(7);
 
+    // No port for the account: fills only, no bars.
     const tape = await buildTape("AAPL", fills, { from: "2026-09-03T00:00:00.000Z" }, new Map());
     expect(tape.fills.map((fill) => fill.signalId)).toEqual([exit.id]);
     expect(tape.pairs).toHaveLength(1);
     expect(tape.pairs[0]).toMatchObject({ entrySignalId: entry.id, exitSignalId: exit.id, pnl: 10 });
     expect(tape.bars).toBeNull();
     expect(tape.barsSource).toBe("none");
+    expect(tape.barsTimeframe).toBeNull();
     expect(tape.from).toBe("2026-09-03T00:00:00.000Z");
     expect(tape.to).toBeNull();
   });
