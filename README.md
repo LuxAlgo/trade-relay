@@ -48,6 +48,17 @@ Fire it, then open the dashboard:
 
 Every signal becomes a story with nothing hidden: the raw payload, what the parser understood it to mean, every risk rule's verdict with its reason, the order that went out, and what the broker answered. Any captured payload replays against paper with one click. It all lives in a SQLite file next to the process. Nothing phones home, ever.
 
+## Fills on the tape
+
+The same stories, read as a chart. The dashboard's **Tape** panel picks a symbol from the fills the flight recorder holds and draws where Trade Relay's orders actually filled: a green triangle below the bar for every buy, a red one above it for every sell, each with its size, and a dashed line from entry to exit with the realized P&L wherever the FIFO matching can pair them (the same rules as the stats cards, from broker-sdk: buys open lots, sells close the oldest first, a sell with no recorded entry stays an unpaired marker). Click a marker and the signal's story opens in the table below, so a fill on the chart is always one click from its payload, its risk decisions, and the broker's answer.
+
+<p align="center">
+  <img src="docs/assets/tape.png" alt="The Tape panel: the simulator's fills for AAPL on a Vela chart, buys marked below the bars and sells above, dashed entry-to-exit lines carrying the realized P&L" width="100%"/>
+  <br><sub>The built-in simulator, a few signals fired through the webhook. No market data was involved: the line is the fill path.</sub>
+</p>
+
+Bars come from the broker when the account's port can provide them, and the panel says which source they came from. No port can today, so the chart draws the **fill path** instead, the fills themselves as the price series, labelled "fill path, no market data". The relay never fabricates a candle it did not see; when a broker grows a bar feed upstream, the same payload (`bars`, `barsSource`) carries it and the client needs no change. The chart is drawn in the browser by [Vela](https://github.com/LuxAlgo/Vela), LuxAlgo's open-source charting library, shipped inside this package and served from your relay's own origin: nothing is fetched from a CDN, and the script only loads when you open the panel. The data behind it is one Bearer-protected call, `GET /api/tape/:symbol?from=&to=`.
+
 Running from a clone instead: `pnpm install && pnpm build`, then `node dist/cli.js init && node dist/cli.js start`.
 
 ## The rails are the product
@@ -107,6 +118,10 @@ No hosted version: your keys and your orders stay on infrastructure you control.
 ## Contributing
 
 `pnpm install && pnpm check` runs everything locally, simulator included, no keys needed. Broker coverage grows upstream in [broker-sdk](https://github.com/LuxAlgo/broker-sdk); parsers, rails, dashboard, and docs grow here. See [CONTRIBUTING.md](CONTRIBUTING.md). Vulnerabilities go to [SECURITY.md](SECURITY.md), not the issue tracker.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The published package also ships [Vela](https://github.com/LuxAlgo/Vela) (Apache-2.0) for the dashboard's chart; its notice is reproduced in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Disclaimer
 

@@ -16,7 +16,8 @@ Node ≥ 22.13 (we use `node:sqlite`). No other services needed: the whole pipel
 ## House rules
 
 - **The rails philosophy is non-negotiable:** safety defaults ON; loosening is an explicit flag whose name says what it does; when a rule can't verify a limit it rejects (fail closed); exits stay privileged; nothing is emulated against a real account.
-- **Dependencies:** the runtime set is `@luxalgo/broker-sdk`, `@modelcontextprotocol/sdk`, `zod`. Adding a fourth needs a very good story.
+- **Dependencies:** the runtime set is `@luxalgo/broker-sdk`, `@modelcontextprotocol/sdk`, `zod`, and `@luxalgo/vela` (the dashboard's chart, Apache-2.0 with a NOTICE we reproduce in `THIRD_PARTY_NOTICES.md`). Adding a fifth needs a very good story.
+- **The dashboard fetches nothing from outside.** Vela is copied into `dist/` at build time (`scripts/copy-vela.mjs`) and served from the relay's own origin; a `<script src="https://…">` in `dashboard.ts` is a bug.
 - **Files are kebab-case**, code is strict TypeScript, comments explain *why*, tests accompany behavior.
 - **Every branch of the pipeline must end in the flight recorder.** If your feature can fail silently, it isn't done.
 - **No telemetry.** Not even "anonymous usage stats". Don't ask.

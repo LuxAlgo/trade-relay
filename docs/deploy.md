@@ -49,6 +49,6 @@ Not yet, honestly. The duplicate-protection window, the daily-loss counter, the 
 
 - `WEBHOOK_TOKEN` and `DASHBOARD_TOKEN` are long and random (`openssl rand -hex 24`).
 - The SQLite path (`storage.path`) is on a persistent volume.
-- HTTPS in front (Railway/tunnels give you this for free; on a bare VPS put Caddy or nginx in front).
+- HTTPS in front (Railway/tunnels give you this for free; on a bare VPS put Caddy or nginx in front). If your proxy only forwards named paths, forward `/vela.global.min.js` alongside `/` and `/api/*`: it is the dashboard's chart library, served by the relay itself so the page never touches a CDN.
 - Broker keys are env vars, never in the config file, never in git.
 - First run: simulator or paper account, fire a test alert, read the flight recorder, only then wire the real strategy.
