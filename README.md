@@ -62,7 +62,7 @@ The same stories, read as a chart. The dashboard's **Tape** panel picks a symbol
 Where the candles come from, and the panel always says which:
 
 - **Simulator** — the simulator is the price process behind every simulated fill, so it draws its own one-minute bars: they start at the first signal's price, hit every price a signal carried at the moment it arrived, and follow a seeded walk in between. Deterministic, and labelled *simulated bars*.
-- **Real brokers** — bars come through [`@luxalgo/broker-sdk`](https://github.com/LuxAlgo/broker-sdk), never from broker code in this repo. The port picks up the SDK's `fetchBars` (Alpaca and Tradier) the moment an SDK release ships it; until then those accounts have no bars and the panel says so.
+- **Real brokers** — bars come through [`@luxalgo/broker-sdk`](https://github.com/LuxAlgo/broker-sdk), never from broker code in this repo. The port uses the SDK's `fetchBars` (Alpaca and Tradier, from `@luxalgo/broker-sdk` 0.5.0). Tradier's market data is production-hosted, so a sandbox token gets no bars; those accounts, like any broker without bars, fall through to the next source and the panel says so.
 - **Crypto pairs** — when the server has no bars, the browser may chart real public candles from Vela's bundled keyless Binance or Coinbase providers, labelled *Binance public data* and so on; if the feed is unreachable, the chart falls back.
 - **Otherwise the fill path** — the fills themselves as the price series, labelled *fill path, no market data*. The relay never fabricates a candle it did not see.
 
