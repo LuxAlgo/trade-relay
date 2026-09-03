@@ -28,5 +28,7 @@ export { createMcpServer } from "./mcp.js";
 export type { McpDeps } from "./mcp.js";
 export { tradeStatsForPort } from "./account-stats.js";
 export type { AccountTradeStats } from "./account-stats.js";
+export { fillsFromRecords, collectFills, pairFills, realizedPnl, summarizeSymbols, buildTape, barsForPort } from "./tape.js";
+export type { TapeFill, TapePair, TapeSymbolSummary, TapeResponse, TapeBar, TapeBarsSource, TapeRange } from "./tape.js";
 export { locateVelaBundle, velaVersion, VELA_BUNDLE_FILE } from "./vela-asset.js";
 export { VERSION } from "./version.js";

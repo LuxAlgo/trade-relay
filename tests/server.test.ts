@@ -159,3 +159,61 @@ describe("the bundled chart library", () => {
     expect(head.headers.get("content-length")).toBe(response.headers.get("content-length"));
   });
 });
+
+describe("the tape API", () => {
+  it("requires the bearer token", async () => {
+    expect((await fetch(`${base}/api/tape`)).status).toBe(401);
+    expect((await fetch(`${base}/api/tape/AAPL`)).status).toBe(401);
+  });
+
+  it("lists symbols with fills, then the fills, FIFO pairs and no invented bars", async () => {
+    await post(`/webhook/${TOKEN}`, { action: "buy", symbol: "AAPL", quantity: 3, price: 120, signalId: "tape-open" });
+    await post(`/webhook/${TOKEN}`, { action: "sell", symbol: "AAPL", quantity: 3, price: 126, signalId: "tape-close" });
+
+    const summary = (await (await authed("/api/tape")).json()) as {
+      symbols: { symbol: string; fills: number; sessions: string[]; accounts: string[] }[];
+      accounts: string[];
+    };
+    const aapl = summary.symbols.find((entry) => entry.symbol === "AAPL");
+    expect(aapl).toBeDefined();
+    expect(aapl!.fills).toBeGreaterThanOrEqual(2);
+    expect(aapl!.sessions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.accounts).toEqual(["sim"]);
+
+    const tape = (await (await authed("/api/tape/AAPL")).json()) as {
+      symbol: string;
+      fills: { signalId: string; side: string; quantity: number; price: number; at: string; endpointId: string; accountId: string; orderId: string }[];
+      pairs: { entrySignalId: string; exitSignalId: string; entryPrice: number; exitPrice: number; quantity: number; pnl: number }[];
+      realizedPnl: number;
+      bars: unknown;
+      barsSource: string;
+      barsTimeframe: unknown;
+    };
+    expect(tape.symbol).toBe("AAPL");
+    const open = tape.fills.find((fill) => fill.price === 120 && fill.side === "buy");
+    const close = tape.fills.find((fill) => fill.price === 126 && fill.side === "sell");
+    expect(open).toMatchObject({ quantity: 3, endpointId: "tv", accountId: "sim" });
+    expect(close).toBeDefined();
+    expect(open!.orderId).toBeTruthy();
+    expect(Date.parse(open!.at)).not.toBeNaN();
+    // Every fill points back at a signal story.
+    const story = await authed(`/api/signals/${open!.signalId}`);
+    expect(story.status).toBe(200);
+    const pair = tape.pairs.find((candidate) => candidate.exitSignalId === close!.signalId && candidate.entrySignalId === open!.signalId);
+    expect(pair).toMatchObject({ quantity: 3, entryPrice: 120, exitPrice: 126, pnl: 18 });
+    expect(tape.bars).toBeNull();
+    expect(tape.barsSource).toBe("none");
+    expect(tape.barsTimeframe).toBeNull();
+  });
+
+  it("filters by range and account, and rejects a malformed range", async () => {
+    const future = (await (await authed("/api/tape/AAPL?from=2999-01-01")).json()) as { fills: unknown[]; from: string };
+    expect(future.fills).toEqual([]);
+    expect(future.from).toBe("2999-01-01T00:00:00.000Z");
+    const other = (await (await authed("/api/tape/AAPL?account=nope")).json()) as { fills: unknown[] };
+    expect(other.fills).toEqual([]);
+    expect((await authed("/api/tape/AAPL?from=yesterday")).status).toBe(400);
+    const none = (await (await authed("/api/tape/ZZZZ")).json()) as { fills: unknown[]; pairs: unknown[]; realizedPnl: number };
+    expect(none).toMatchObject({ fills: [], pairs: [], realizedPnl: 0 });
+  });
+});

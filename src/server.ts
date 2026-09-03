@@ -8,6 +8,7 @@ import type { Engine } from "./engine.js";
 import type { StorageDriver } from "./storage/driver.js";
 import type { SignalRecord } from "./types.js";
 import { renderDashboard } from "./dashboard.js";
+import { buildTape, collectFills, summarizeSymbols } from "./tape.js";
 import { loadVelaAsset, VELA_BUNDLE_FILE } from "./vela-asset.js";
 
 /*
@@ -299,6 +300,37 @@ export const createRelayServer = (deps: ServerDeps): Server => {
 
     if (method === "GET" && path === "/api/events") {
       json(response, 200, storage.listEvents(Math.min(Number(url.searchParams.get("limit") ?? 50), 500)));
+      return;
+    }
+
+    // The tape: which symbols the flight recorder holds fills for, then the
+    // fills of one symbol (with FIFO pairs and, where a port can supply them,
+    // bars) for the dashboard's chart. Read-only, so any scope may look.
+    if (method === "GET" && path === "/api/tape") {
+      const fills = collectFills(storage);
+      json(response, 200, {
+        symbols: summarizeSymbols(fills),
+        accounts: [...new Set(fills.map((fill) => fill.accountId))].sort(),
+      });
+      return;
+    }
+
+    const tapeMatch = path.match(/^\/api\/tape\/([^/]+)$/);
+    if (method === "GET" && tapeMatch) {
+      const symbol = decodeURIComponent(tapeMatch[1]!);
+      const range: { from?: string; to?: string } = {};
+      for (const key of ["from", "to"] as const) {
+        const raw = url.searchParams.get(key);
+        if (raw === null || raw === "") continue;
+        const ms = Date.parse(raw);
+        if (Number.isNaN(ms)) {
+          json(response, 400, { error: `${key} must be an ISO 8601 date or instant` });
+          return;
+        }
+        range[key] = new Date(ms).toISOString();
+      }
+      const account = url.searchParams.get("account");
+      json(response, 200, await buildTape(symbol, collectFills(storage), range, engine.ports, account ?? undefined));
       return;
     }
 
