@@ -8,6 +8,7 @@ import type { Engine } from "./engine.js";
 import type { StorageDriver } from "./storage/driver.js";
 import type { SignalRecord } from "./types.js";
 import { renderDashboard } from "./dashboard.js";
+import { loadVelaAsset, VELA_BUNDLE_FILE } from "./vela-asset.js";
 
 /*
   The HTTP surface, on node:http and nothing else.
@@ -18,6 +19,8 @@ import { renderDashboard } from "./dashboard.js";
   - /api/*             — the dashboard's data plane, Bearer-token protected.
     With no dashboardToken configured, it answers loopback callers only.
   - /  and /health     — the dashboard shell and liveness probe; no data.
+  - /vela.global.min.js — the chart library the dashboard draws with, served
+    from this origin like the shell itself (no CDN); static, no data.
 */
 
 export type ServerDeps = {
@@ -70,6 +73,9 @@ const summarize = (record: SignalRecord) => ({
 export const createRelayServer = (deps: ServerDeps): Server => {
   const { config, engine, storage, watchReaders, version } = deps;
   const startedAt = Date.now();
+  // Vela's browser bundle, read once. Absent only when the build step that
+  // copies it was skipped and the package is not installed either.
+  const vela = loadVelaAsset();
 
   const isLoopback = (request: IncomingMessage): boolean => {
     const address = request.socket.remoteAddress ?? "";
@@ -312,6 +318,23 @@ export const createRelayServer = (deps: ServerDeps): Server => {
       }
       if (request.method === "GET" && url.pathname === "/health") {
         json(response, 200, { ok: true, version });
+        return;
+      }
+      if ((request.method === "GET" || request.method === "HEAD") && url.pathname === `/${VELA_BUNDLE_FILE}`) {
+        if (!vela) {
+          json(response, 404, {
+            error: `${VELA_BUNDLE_FILE} is not bundled with this build — run the build (scripts/copy-vela.mjs) or install @luxalgo/vela`,
+          });
+          return;
+        }
+        // Immutable is safe: the dashboard requests it with Vela's version in
+        // the query string, so an upgrade is a new URL.
+        response.writeHead(200, {
+          "Content-Type": "text/javascript; charset=utf-8",
+          "Content-Length": vela.body.byteLength,
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        response.end(request.method === "HEAD" ? undefined : vela.body);
         return;
       }
       if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {

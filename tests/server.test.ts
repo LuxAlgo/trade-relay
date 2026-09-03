@@ -143,3 +143,19 @@ describe("dashboard API", () => {
     expect(await response.text()).toContain("flight recorder");
   });
 });
+
+describe("the bundled chart library", () => {
+  it("serves Vela from this origin, immutable, as JavaScript", async () => {
+    const response = await fetch(`${base}/vela.global.min.js`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    const body = await response.text();
+    expect(Number(response.headers.get("content-length"))).toBe(Buffer.byteLength(body));
+    expect(body.startsWith("var Vela=")).toBe(true);
+    expect(body).toContain("registerNativeIndicator");
+    const head = await fetch(`${base}/vela.global.min.js`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-length")).toBe(response.headers.get("content-length"));
+  });
+});
