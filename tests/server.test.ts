@@ -158,6 +158,13 @@ describe("the bundled chart library", () => {
     expect(head.status).toBe(200);
     expect(head.headers.get("content-length")).toBe(response.headers.get("content-length"));
   });
+
+  it("the dashboard loads Vela lazily and only from this origin", async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    expect(html).toContain('"/vela.global.min.js?v=');
+    expect(html).not.toMatch(/<script[^>]+src=/);
+    expect(html).not.toMatch(/https?:\/\/[^"' ]*\.(js|css)/);
+  });
 });
 
 describe("the tape API", () => {

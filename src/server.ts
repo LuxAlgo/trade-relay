@@ -370,7 +370,7 @@ export const createRelayServer = (deps: ServerDeps): Server => {
         return;
       }
       if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-        const html = renderDashboard(version);
+        const html = renderDashboard(version, vela?.asset.version ?? version);
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         response.end(html);
         return;
