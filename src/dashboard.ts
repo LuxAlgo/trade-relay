@@ -4,9 +4,15 @@
   pastes once (kept in localStorage). Dark, quiet, and honest — the signal
   story chain is the product: received → parsed → every risk decision with
   its reason → the order → the fill.
+
+  The Tape panel puts those fills on a price chart drawn by Vela
+  (@luxalgo/vela, Apache-2.0), served from this same origin. Its script is
+  fetched only when the panel is first opened, so the default page weighs
+  exactly what it did without it. Vela's own attribution mark stays on the
+  chart (see THIRD_PARTY_NOTICES.md).
 */
 
-export const renderDashboard = (version: string): string => `<!doctype html>
+export const renderDashboard = (version: string, velaVersion = version): string => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -62,6 +68,15 @@ select,input{background:var(--panel2);color:var(--text);border:1px solid var(--l
 .err{color:var(--red);font:12px var(--mono);margin-top:6px}
 footer{margin-top:24px;color:var(--dim);font-size:12px}
 a{color:var(--blue);text-decoration:none}
+.tape{display:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.tape.open{display:block}
+#tapechart{height:380px}
+.tape-foot{display:flex;gap:14px;flex-wrap:wrap;padding:8px 12px;color:var(--dim);font-size:12px;border-top:1px solid var(--line)}
+.tape-foot .mono{font-size:12px}
+#tapecontrols{display:none;gap:10px;align-items:center;flex-wrap:wrap}
+#tapecontrols.open{display:flex}
+input[type=date]{font-family:var(--mono);font-size:12px}
+tr.pinned td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
 @media(prefers-color-scheme:light){:root{--bg:#f5f6f9;--panel:#fff;--panel2:#eef0f5;--line:#dde1ea;--text:#1a2130;--dim:#66708a}h1 .mark{filter:invert(1)}}
 </style>
 </head>
@@ -89,6 +104,23 @@ a{color:var(--blue);text-decoration:none}
 <div class="grid" id="accounts"></div>
 
 <div class="toolbar">
+  <b>Tape</b>
+  <button id="tapetoggle" title="Chart the recorded fills of one symbol">Show tape</button>
+  <span id="tapecontrols">
+    <select id="tsym" title="Symbols with recorded fills"></select>
+    <select id="tacct" title="Account"><option value="">all accounts</option></select>
+    <input id="tfrom" type="date" title="From (UTC day)">
+    <span class="mono" style="color:var(--dim)">→</span>
+    <input id="tto" type="date" title="To (UTC day, inclusive)">
+    <span class="pill" id="tapepill">–</span>
+  </span>
+</div>
+<div class="tape" id="tape">
+  <div id="tapechart"></div>
+  <div class="tape-foot" id="tapefoot"></div>
+</div>
+
+<div class="toolbar">
   <b>Signals</b>
   <select id="fstatus">
     <option value="">all statuses</option>
@@ -112,7 +144,7 @@ const H=()=>token?{Authorization:"Bearer "+token}:{};
 const api=async(p,opt)=>{const r=await fetch(p,Object.assign({headers:Object.assign({"Content-Type":"application/json"},H())},opt||{}));if(r.status===401){$("#tokenbox").style.display="block";throw new Error("unauthorized")}return r.json()};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=n=>typeof n==="number"?n.toLocaleString(undefined,{maximumFractionDigits:2}):n;
-let open=new Set(), lastSignals=[];
+let open=new Set(), lastSignals=[], pinned=new Map();
 
 $("#savetoken").onclick=()=>{token=$("#token").value.trim();localStorage.setItem("tr_token",token);$("#tokenbox").style.display="none";tick()};
 
@@ -138,9 +170,16 @@ async function tick(){
     const sigs=await api("/api/signals?"+q);
     lastSignals=sigs;
     $("#count").textContent=sigs.length+" shown";
-    $("#rows").innerHTML=sigs.map(row).join("");
-    for(const s of sigs)if(open.has(s.id)){const el=document.getElementById("story-"+s.id);if(el)el.classList.add("open")}
+    renderRows();
+    if(tape.open)refreshTape();
   }catch(e){/* token box already shown on 401 */}
+}
+// Rows the tape pinned (a marker's story that the current filter or page
+// no longer lists) stay on top until the page reloads.
+function renderRows(){
+  const shown=[...pinned.values()].filter(p=>!lastSignals.some(s=>s.id===p.id)).concat(lastSignals);
+  $("#rows").innerHTML=shown.map(row).join("");
+  for(const s of shown)if(open.has(s.id)){const el=document.getElementById("story-"+s.id);if(el)el.classList.add("open")}
 }
 function card(k,v,s,env,st){
   let stat="";
@@ -154,7 +193,7 @@ function sigLabel(s){if(!s.signal)return "—";const g=s.signal;return (g.action
 function ordLabel(s){const o=s.order;if(!o)return s.orders&&s.orders.length?s.orders.length+" order"+(s.orders.length===1?"":"s"):"—";return o.status+(o.filledAvgPrice?" @ "+fmt(o.filledAvgPrice):"")}
 function row(s){
   const t=new Date(s.receivedAt).toLocaleTimeString();
-  return '<tr class="row" onclick="toggle(\\''+s.id+'\\')"><td class="mono">'+t+'</td><td>'+esc(s.endpointId)+'</td><td class="mono">'+esc(s.parser||"—")+'</td><td>'+esc(sigLabel(s))+'</td><td><span class="chip '+s.status+'">'+s.status+'</span></td><td class="mono">'+esc(ordLabel(s))+'</td><td class="mono">'+(s.latencyMs??"—")+'</td></tr>'
+  return '<tr class="row'+(pinned.has(s.id)?" pinned":"")+'" id="row-'+s.id+'" onclick="toggle(\\''+s.id+'\\')"><td class="mono">'+t+'</td><td>'+esc(s.endpointId)+'</td><td class="mono">'+esc(s.parser||"—")+'</td><td>'+esc(sigLabel(s))+'</td><td><span class="chip '+s.status+'">'+s.status+'</span></td><td class="mono">'+esc(ordLabel(s))+'</td><td class="mono">'+(s.latencyMs??"—")+'</td></tr>'
   +'<tr class="story" id="story-'+s.id+'"><td colspan="7">'+story(s)+"</td></tr>"
 }
 function story(s){
@@ -175,6 +214,176 @@ function pretty(x){try{return JSON.stringify(JSON.parse(x),null,2)}catch(e){retu
 window.toggle=id=>{const el=document.getElementById("story-"+id);if(!el)return;el.classList.toggle("open");el.classList.contains("open")?open.add(id):open.delete(id)};
 window.replay=async id=>{if(!confirm("Re-run this payload through the whole pipeline?"))return;await api("/api/signals/"+id+"/replay",{method:"POST",body:JSON.stringify({})});tick()};
 $("#fstatus").onchange=tick;$("#fendpoint").onchange=tick;
+
+// ── Tape: the recorded fills of one symbol on a Vela chart ──────────────
+// Vela is loaded lazily from this origin the first time the panel opens.
+const VELA_SRC="/vela.global.min.js?v=${velaVersion}";
+const tape={open:false,chart:null,unsub:[],vela:null,summary:null,data:null,key:"",registered:false,lastTime:null,busy:false,bars:null,tf:"1"};
+// Crypto pairs can chart real public candles from Vela's bundled keyless
+// providers when the server has no bars (Trade Journal's heuristic).
+const looksCrypto=sym=>/^[A-Z0-9]{2,10}(USDT|USDC|USD|PERP|BTC|ETH)(\.P)?$/.test(sym);
+const tfMs=tf=>{const m=/^(\d+)\s*(m|h|d|w)?$/i.exec(tf);if(!m)return 60000;const n=parseInt(m[1],10),u=(m[2]||"m").toLowerCase();return n*(u==="m"?60000:u==="h"?3600000:u==="d"?86400000:604800000)};
+// A timeframe that frames the whole fill span in a few dozen bars (public candles).
+const tfForSpan=ms=>{const m=ms/60000;return m<=90?"1":m<=480?"5":m<=2880?"15":m<=14400?"60":"1D"};
+// On a bar chart a fill sits on the bar that contains its instant.
+const snap=(t,bars,tf)=>{if(!bars)return t;const w=tfMs(tf);let best=bars[0].time;for(const b of bars){if(b.time<=t)best=b.time;else break}return t-best<w?best:Math.floor(t/w)*w};
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// Vela wants literal colors; these are the page's own variables, resolved.
+const velaTheme=()=>({background:cssVar("--panel"),textColor:cssVar("--dim"),gridColor:cssVar("--line"),borderColor:cssVar("--line"),upColor:cssVar("--green"),downColor:cssVar("--red"),fontFamily:getComputedStyle(document.body).fontFamily});
+function loadVela(){
+  if(window.Vela)return Promise.resolve(window.Vela);
+  if(tape.vela)return tape.vela;
+  tape.vela=new Promise((res,rej)=>{const s=document.createElement("script");s.src=VELA_SRC;s.onload=()=>res(window.Vela);s.onerror=()=>{tape.vela=null;rej(new Error("could not load "+VELA_SRC))};document.head.appendChild(s)});
+  return tape.vela;
+}
+const day=iso=>iso.slice(0,10);
+const money=n=>(n>=0?"+":"−")+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+// Bar spacing for the fill path: the coarsest timeframe that still gives the
+// typical gap between consecutive fills its own bar (Vela's floor is one minute).
+const tfFor=times=>{const gaps=[];for(let i=1;i<times.length;i++)if(times[i]>times[i-1])gaps.push(times[i]-times[i-1]);
+  if(!gaps.length)return "1";gaps.sort((a,b)=>a-b);const m=gaps[Math.floor(gaps.length/2)]/60000;
+  return m>=1440?"1D":m>=60?"60":m>=15?"15":m>=5?"5":"1"};
+// Offline mode: the fills themselves are the price series (one bar per
+// instant, OHLC of the fills at that instant). Nothing is interpolated.
+function fillPath(fills){
+  const bars=[];
+  for(const f of fills){const t=Date.parse(f.at);const last=bars[bars.length-1];
+    if(last&&last.time===t){last.high=Math.max(last.high,f.price);last.low=Math.min(last.low,f.price);last.close=f.price}
+    else bars.push({time:t,open:f.price,high:f.price,low:f.price,close:f.price,volume:0})}
+  return bars;
+}
+function paint(d){
+  const up=cssVar("--green"),down=cssVar("--red"),text=cssVar("--text");
+  const bars=tape.bars,tf=tape.tf,x=t=>snap(Date.parse(t),bars,tf);
+  // Realized P&L per exit, summed over the lots it closed, rides the exit's own marker.
+  const pnlByExit=new Map();
+  for(const p of d.pairs)pnlByExit.set(p.exitSignalId,(pnlByExit.get(p.exitSignalId)||0)+p.pnl);
+  // Markers ride the bar of their fill (the exact price is in the tooltip and
+  // the line geometry); the marker text carries side, size, and the P&L an exit realized.
+  const labels=d.fills.map((f,i)=>{const pnl=f.side==="sell"?pnlByExit.get(f.signalId):undefined;return {id:"fill-"+i,paneId:"price",xloc:"bar_time",x:x(f.at),y:f.price,yloc:f.side==="buy"?"belowbar":"abovebar",
+    text:(f.side==="buy"?"▲ BUY ":"▼ SELL ")+fmt(f.quantity)+(pnl!==undefined?"  "+money(pnl):""),style:f.side==="buy"?"triangleup":"triangledown",color:f.side==="buy"?up:down,textColor:pnl===undefined?text:pnl>=0?up:down,
+    size:"small",textAlign:"center",fontFamily:"default",tooltip:f.side+" "+fmt(f.quantity)+" @ "+fmt(f.price)+" · "+new Date(f.at).toLocaleString()+(pnl!==undefined?" · realized "+money(pnl):"")+" · click for the story",overlay:true}});
+  const lines=d.pairs.map((p,i)=>({id:"pair-"+i,paneId:"price",xloc:"bar_time",x1:x(p.entryAt),y1:p.entryPrice,x2:x(p.exitAt),y2:p.exitPrice,extend:"none",
+    color:p.pnl>=0?up:down,invisible:false,width:2,style:"dashed",arrowLeft:false,arrowRight:true,overlay:true}));
+  return {lines,labels};
+}
+// Where the candles came from, in the legend's words.
+function sourceLabel(d,provider){
+  if(provider)return esc(provider)+" public data";
+  if(!d.bars)return "fill path, no market data";
+  if(d.barsSource==="simulator")return "simulated bars"+(d.barsTimeframe?" · "+esc(d.barsTimeframe):"");
+  return "bars: "+esc(d.barsSource)+(d.barsTimeframe?" · "+esc(d.barsTimeframe):"");
+}
+function footer(d,sym,src){
+  $("#tapefoot").innerHTML='<span><b>'+esc(sym)+'</b> · '+d.fills.length+' fill'+(d.fills.length===1?"":"s")+' · '+d.pairs.length+' FIFO pair'+(d.pairs.length===1?"":"s")+'</span>'
+    +'<span class="'+(d.realizedPnl>=0?"pnl-up":"pnl-down")+'">'+money(d.realizedPnl)+' realized</span><span id="tapesrc">'+src+'</span><span>▲ buy below the bar · ▼ sell above, with the P&amp;L it realized · dashed line: entry → exit · click a marker to open its story</span>'
+    +'<span style="margin-left:auto">chart by <a href="https://github.com/LuxAlgo/Vela" rel="noopener">Vela</a></span>';
+}
+// Vela's bundled keyless providers, when the global bundle carries them.
+const publicProviders=V=>[["binance",V.BinanceProvider],["coinbase",V.CoinbaseProvider]].filter(p=>typeof p[1]==="function");
+function ensureIndicator(V){
+  if(tape.registered)return;
+  // A native indicator that paints whatever tape is currently loaded; the
+  // chart is rebuilt per load, so one registered type is enough.
+  V.registerNativeIndicator({type:"trade-relay-fills",title:"Fills",shortTitle:"fills",paneHint:"price",overlay:true,inputsSchema:()=>[],defaultInputs:()=>({}),
+    create:()=>({start(ctx){if(tape.data)ctx.emit(paint(tape.data));ctx.setStatus("idle")},onBars(){},onViewport(){},setInputs(){},suspend(){},resume(){},stop(){}})});
+  tape.registered=true;
+}
+function destroyChart(){for(const u of tape.unsub)try{u()}catch(e){}tape.unsub=[];if(tape.chart){try{tape.chart.destroy()}catch(e){}tape.chart=null}$("#tapechart").innerHTML=""}
+function tapeParams(){
+  const q=new URLSearchParams();
+  if($("#tfrom").value)q.set("from",$("#tfrom").value+"T00:00:00.000Z");
+  if($("#tto").value)q.set("to",$("#tto").value+"T23:59:59.999Z");
+  if($("#tacct").value)q.set("account",$("#tacct").value);
+  return q;
+}
+async function loadSummary(){
+  const sum=await api("/api/tape");tape.summary=sum;
+  const sel=$("#tsym"),prev=sel.value;
+  sel.innerHTML=sum.symbols.map(s=>'<option value="'+esc(s.symbol)+'">'+esc(s.symbol)+" · "+s.fills+" fill"+(s.fills===1?"":"s")+"</option>").join("")||'<option value="">no fills recorded yet</option>';
+  if(prev&&sum.symbols.some(s=>s.symbol===prev))sel.value=prev;
+  const acct=$("#tacct");
+  for(const a of sum.accounts)if(![...acct.options].some(o=>o.value===a)){const o=document.createElement("option");o.value=a;o.textContent=a;acct.appendChild(o)}
+  if(!$("#tfrom").value&&!$("#tto").value)defaultRange();
+}
+// Default window: the last five sessions (UTC days) that have fills for the symbol.
+function defaultRange(){
+  const s=(tape.summary&&tape.summary.symbols||[]).find(x=>x.symbol===$("#tsym").value);
+  if(!s)return;const last=s.sessions.slice(-5);
+  $("#tfrom").value=last[0];$("#tto").value=last[last.length-1];
+}
+async function refreshTape(){
+  if(tape.busy)return;tape.busy=true;
+  try{
+    if(!tape.summary)await loadSummary();
+    const sym=$("#tsym").value;
+    if(!sym){$("#tapefoot").innerHTML="No fills in the flight recorder yet — fire a signal and it lands here.";$("#tapepill").textContent="0 fills";destroyChart();tape.key="";return}
+    const d=await api("/api/tape/"+encodeURIComponent(sym)+"?"+tapeParams());
+    const key=JSON.stringify([d,cssVar("--bg")]);
+    if(key===tape.key)return;tape.key=key;tape.data=d;
+    $("#tapepill").textContent=d.fills.length+" fill"+(d.fills.length===1?"":"s");
+    footer(d,sym,sourceLabel(d));
+    destroyChart();
+    if(!d.fills.length)return;
+    const V=await loadVela();ensureIndicator(V);
+    const times=d.fills.map(f=>Date.parse(f.at)),first=times[0],lastT=times[times.length-1],span=Math.max(lastT-first,60000);
+    const serverBars=d.bars&&d.bars.length?d.bars:null;
+    const base={theme:velaTheme(),height:380,live:false,volume:false,drawings:false,currentPriceLine:false};
+    const frame=tf=>{const pad=Math.max(span*0.15,3*tfMs(tf));return {from:first-pad,to:lastT+pad}};
+    // Offline chart: the server's bars as candles, else the fill path as a line.
+    const offline=()=>{tape.bars=serverBars;tape.tf=serverBars?(d.barsTimeframe||"1m"):tfFor(times);
+      return new V.Vela($("#tapechart"),Object.assign({},base,{data:serverBars||fillPath(d.fills),timeframe:tape.tf,priceStyle:serverBars?"candles":"line",visibleRange:frame(tape.tf)}))};
+    let chart=null,provider=null;
+    const providers=!serverBars&&looksCrypto(sym)?publicProviders(V):[];
+    if(providers.length){
+      // Real public candles for a crypto pair, from Vela's keyless providers.
+      // The load parks until a provider resolves the symbol; if none does in
+      // time (or the host is unreachable) the fill path takes over instead.
+      tape.bars=null;tape.tf=tfForSpan(span);
+      chart=new V.Vela($("#tapechart"),Object.assign({},base,{symbol:sym,timeframe:tape.tf,priceStyle:"candles",visibleRange:frame(tape.tf)}));
+      try{
+        for(const [name,P] of providers)chart.data.registerProvider(name,new P());
+        await Promise.race([chart.ready(),new Promise((_,rej)=>setTimeout(()=>rej(new Error("candle feed timeout")),10000))]);
+        const r=chart.data.resolve(sym);provider=r&&r.provider?r.provider.charAt(0).toUpperCase()+r.provider.slice(1):"public";
+      }catch(e){try{chart.destroy()}catch(_){}chart=null}
+    }
+    if(!chart)chart=offline();
+    tape.chart=chart;
+    // Nothing here is live: no last-price tag, no bar-close countdown.
+    try{chart.renderer.set({priceLabel:false,countdown:false})}catch(e){}
+    footer(d,sym,sourceLabel(d,provider));
+    chart.addNativeIndicator("trade-relay-fills");
+    // Click → the fill nearest the crosshair's time → that signal's story row.
+    // A drag (pan) is not a click: the pointer must land where it went down.
+    const near=t=>{if(t==null)return null;let best=null,bd=Infinity;for(const f of d.fills){const dt=Math.abs(Date.parse(f.at)-t);if(dt<bd){bd=dt;best=f}}return bd<=Math.max(span/40,30000,tfMs(tape.tf))?best:null}; // on candles, the whole bar is the marker's target
+    const cross=typeof chart.onCrosshairMove==="function"?chart.onCrosshairMove.bind(chart):chart.renderer&&typeof chart.renderer.onCrosshairMove==="function"?chart.renderer.onCrosshairMove.bind(chart.renderer):null;
+    if(cross)tape.unsub.push(cross(e=>{tape.lastTime=e.time}));
+    const el=$("#tapechart");let downAt=null;
+    const down=e=>{downAt=[e.clientX,e.clientY]};
+    const up=e=>{if(!downAt)return;const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);downAt=null;if(moved>5)return;const f=near(tape.lastTime);if(f)openStory(f.signalId)};
+    el.addEventListener("pointerdown",down);el.addEventListener("pointerup",up);
+    tape.unsub.push(()=>{el.removeEventListener("pointerdown",down);el.removeEventListener("pointerup",up)});
+  }catch(e){$("#tapefoot").innerHTML='<span class="err">'+esc(e.message||e)+"</span>"}
+  finally{tape.busy=false}
+}
+async function openStory(id){
+  if(!document.getElementById("row-"+id)){
+    try{const s=await api("/api/signals/"+id);pinned.set(id,s);renderRows()}catch(e){return}
+  }
+  const el=document.getElementById("story-"+id);if(!el)return;
+  el.classList.add("open");open.add(id);
+  const r=document.getElementById("row-"+id);if(r)r.scrollIntoView({behavior:"smooth",block:"center"});
+}
+$("#tapetoggle").onclick=async()=>{
+  tape.open=!tape.open;
+  $("#tapetoggle").textContent=tape.open?"Hide tape":"Show tape";
+  $("#tape").classList.toggle("open",tape.open);$("#tapecontrols").classList.toggle("open",tape.open);
+  if(tape.open){tape.key="";refreshTape()}else destroyChart();
+};
+$("#tsym").onchange=()=>{$("#tfrom").value="";$("#tto").value="";defaultRange();tape.key="";refreshTape()};
+$("#tacct").onchange=$("#tfrom").onchange=$("#tto").onchange=()=>{tape.key="";refreshTape()};
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(tape.chart)tape.chart.setTheme(velaTheme())});
+
 tick();setInterval(tick,4000);
 </script>
 </body>

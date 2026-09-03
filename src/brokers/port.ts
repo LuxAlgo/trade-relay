@@ -1,4 +1,4 @@
-import type { BracketSpec, OrderKind, PortOrder, PortPosition, PortTrade, TimeInForce } from "../types.js";
+import type { BracketSpec, OrderKind, PortBar, PortBarRequest, PortOrder, PortPosition, PortTrade, TimeInForce } from "../types.js";
 
 /*
   BrokerPort is the one seam between the relay and the outside world. All
@@ -55,6 +55,12 @@ export type BrokerPort = {
    * provide it. Absent means stats are simply unavailable for the account.
    */
   getTrades?: () => Promise<PortTrade[]>;
+  /**
+   * Price bars for the dashboard's tape, where the broker (through
+   * @luxalgo/broker-sdk) or the simulator can provide them. Absent means the
+   * tape charts the fill path alone — bars are never made up here.
+   */
+  getBars?: (symbol: string, request: PortBarRequest) => Promise<PortBar[]>;
   /**
    * Price advance hook. The simulator uses it to trigger resting orders
    * (stops, limits, bracket legs) and returns the orders it filled; real

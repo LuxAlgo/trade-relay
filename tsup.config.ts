@@ -13,6 +13,9 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
     target: "node22",
+    // import.meta.url locates the bundled Vela file next to the build output;
+    // the shim gives the CommonJS build the same answer.
+    shims: true,
     external,
   },
   {

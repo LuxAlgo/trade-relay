@@ -1,6 +1,6 @@
 import { connect, type BrokerSnapshot } from "@luxalgo/broker-sdk";
 import { connectTrading, type TradingConnection } from "@luxalgo/broker-sdk/orders";
-import type { PortOrder, PortPosition } from "../types.js";
+import type { PortBar, PortBarRequest, PortOrder, PortPosition } from "../types.js";
 import { UnsupportedOrderError, type BrokerPort, type PortCapabilities, type PortEquity, type PortOrderRequest } from "./port.js";
 
 /*
@@ -12,7 +12,23 @@ import { UnsupportedOrderError, type BrokerPort, type PortCapabilities, type Por
   acknowledgement sentence into their config, and Tradier is pinned to its
   sandbox by the SDK itself. What the SDK cannot express is refused with a
   pointer to the upstream proposal, never emulated against a real account.
+
+  Bars for the dashboard's tape follow the same rule: they come from the
+  SDK's `fetchBars` when the installed release has it, and the port simply
+  has no getBars otherwise. Detected at runtime against a structural type,
+  so the relay compiles against SDK versions from before and after it lands.
 */
+
+/** The bar capability broker-sdk is growing; optional until its release ships. */
+type BarsCapable = {
+  fetchBars?: (symbol: string, request: { timeframe: string; from?: number; to?: number }) => Promise<PortBar[]>;
+};
+
+const barsCapability = (...connections: (object | undefined)[]): BarsCapable | undefined =>
+  connections.find(
+    (connection): connection is BarsCapable =>
+      connection !== undefined && typeof (connection as BarsCapable).fetchBars === "function",
+  );
 
 const ALPACA_CAPABILITIES: PortCapabilities = {
   orderTypes: ["market", "limit"],
@@ -71,6 +87,7 @@ export const createSdkPort = (options: SdkPortOptions): BrokerPort => {
   // sandbox reads are impossible today — rails that need positions or
   // equity fail closed with this message until the upstream ask lands.
   const reader = options.broker === "alpaca" ? connect({ broker: "alpaca", credentials: options.credentials }) : undefined;
+  const bars = barsCapability(reader, trading);
   const ttl = options.broker === "alpaca" && options.snapshotTtlMs !== undefined ? options.snapshotTtlMs : 3000;
 
   let cached: { snapshot: BrokerSnapshot; at: number } | undefined;
@@ -158,5 +175,17 @@ export const createSdkPort = (options: SdkPortOptions): BrokerPort => {
     // The read layer already returns normalized fills; the stats engine
     // consumes them directly. Only where reads work (not Tradier sandbox).
     ...(options.broker === "alpaca" ? { getTrades: async () => (await account()).trades } : {}),
+
+    // Bars only where the SDK release provides them (see BarsCapable above).
+    ...(bars
+      ? {
+          getBars: async (symbol: string, request: PortBarRequest): Promise<PortBar[]> =>
+            bars.fetchBars!(symbol, {
+              timeframe: request.timeframe,
+              ...(request.from !== undefined ? { from: request.from } : {}),
+              ...(request.to !== undefined ? { to: request.to } : {}),
+            }),
+        }
+      : {}),
   };
 };

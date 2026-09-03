@@ -35,10 +35,11 @@ const config = parseConfig({
 
 let server: Server;
 let base: string;
+let engine: ReturnType<typeof createEngine>;
 
 beforeAll(async () => {
   const storage = createMemoryStorage();
-  const engine = createEngine({ config, storage, ports: createPorts(config), notifier: { send: () => {} } });
+  engine = createEngine({ config, storage, ports: createPorts(config), notifier: { send: () => {} } });
   server = createRelayServer({ config, engine, storage, watchReaders: new Map(), version: "test" });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -141,5 +142,106 @@ describe("dashboard API", () => {
     const response = await fetch(`${base}/`);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("flight recorder");
+  });
+});
+
+describe("the bundled chart library", () => {
+  it("serves Vela from this origin, immutable, as JavaScript", async () => {
+    const response = await fetch(`${base}/vela.global.min.js`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    const body = await response.text();
+    expect(Number(response.headers.get("content-length"))).toBe(Buffer.byteLength(body));
+    expect(body.startsWith("var Vela=")).toBe(true);
+    expect(body).toContain("registerNativeIndicator");
+    const head = await fetch(`${base}/vela.global.min.js`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-length")).toBe(response.headers.get("content-length"));
+  });
+
+  it("the dashboard loads Vela lazily and only from this origin", async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    expect(html).toContain('"/vela.global.min.js?v=');
+    expect(html).not.toMatch(/<script[^>]+src=/);
+    expect(html).not.toMatch(/https?:\/\/[^"' ]*\.(js|css)/);
+  });
+});
+
+describe("the tape API", () => {
+  it("requires the bearer token", async () => {
+    expect((await fetch(`${base}/api/tape`)).status).toBe(401);
+    expect((await fetch(`${base}/api/tape/AAPL`)).status).toBe(401);
+  });
+
+  it("lists symbols with fills, then the fills, FIFO pairs and the simulator's bars", async () => {
+    await post(`/webhook/${TOKEN}`, { action: "buy", symbol: "AAPL", quantity: 3, price: 120, signalId: "tape-open" });
+    await post(`/webhook/${TOKEN}`, { action: "sell", symbol: "AAPL", quantity: 3, price: 126, signalId: "tape-close" });
+
+    const summary = (await (await authed("/api/tape")).json()) as {
+      symbols: { symbol: string; fills: number; sessions: string[]; accounts: string[] }[];
+      accounts: string[];
+    };
+    const aapl = summary.symbols.find((entry) => entry.symbol === "AAPL");
+    expect(aapl).toBeDefined();
+    expect(aapl!.fills).toBeGreaterThanOrEqual(2);
+    expect(aapl!.sessions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.accounts).toEqual(["sim"]);
+
+    const tape = (await (await authed("/api/tape/AAPL")).json()) as {
+      symbol: string;
+      fills: { signalId: string; side: string; quantity: number; price: number; at: string; endpointId: string; accountId: string; orderId: string }[];
+      pairs: { entrySignalId: string; exitSignalId: string; entryPrice: number; exitPrice: number; quantity: number; pnl: number }[];
+      realizedPnl: number;
+      bars: { time: number; open: number; high: number; low: number; close: number }[] | null;
+      barsSource: string;
+      barsTimeframe: string | null;
+    };
+    expect(tape.symbol).toBe("AAPL");
+    const open = tape.fills.find((fill) => fill.price === 120 && fill.side === "buy");
+    const close = tape.fills.find((fill) => fill.price === 126 && fill.side === "sell");
+    expect(open).toMatchObject({ quantity: 3, endpointId: "tv", accountId: "sim" });
+    expect(close).toBeDefined();
+    expect(open!.orderId).toBeTruthy();
+    expect(Date.parse(open!.at)).not.toBeNaN();
+    // Every fill points back at a signal story.
+    const story = await authed(`/api/signals/${open!.signalId}`);
+    expect(story.status).toBe(200);
+    const pair = tape.pairs.find((candidate) => candidate.exitSignalId === close!.signalId && candidate.entrySignalId === open!.signalId);
+    expect(pair).toMatchObject({ quantity: 3, entryPrice: 120, exitPrice: 126, pnl: 18 });
+    // The simulator is the price process, so its bars ride along and say so.
+    expect(tape.barsSource).toBe("simulator");
+    expect(tape.barsTimeframe).toBe("1m");
+    expect(tape.bars!.length).toBeGreaterThan(0);
+    const minute = 60_000;
+    const openBar = tape.bars!.find((bar) => bar.time === Math.floor(Date.parse(open!.at) / minute) * minute)!;
+    expect(openBar.low).toBeLessThanOrEqual(120);
+    expect(openBar.high).toBeGreaterThanOrEqual(120);
+    expect(tape.bars![0]!.time).toBeLessThanOrEqual(Date.parse(open!.at));
+    expect(tape.bars![tape.bars!.length - 1]!.time).toBeGreaterThanOrEqual(Date.parse(close!.at));
+  });
+
+  it("answers bars: null, barsSource: none when the account's port has no bar capability", async () => {
+    const port = engine.ports.get("sim")!;
+    const getBars = port.getBars;
+    delete (port as { getBars?: unknown }).getBars;
+    try {
+      const tape = (await (await authed("/api/tape/AAPL")).json()) as { bars: unknown; barsSource: string; barsTimeframe: unknown; fills: unknown[] };
+      expect(tape.fills.length).toBeGreaterThan(0);
+      expect(tape).toMatchObject({ bars: null, barsSource: "none", barsTimeframe: null });
+    } finally {
+      if (getBars) port.getBars = getBars;
+    }
+  });
+
+  it("filters by range and account, and rejects a malformed range", async () => {
+    const future = (await (await authed("/api/tape/AAPL?from=2999-01-01")).json()) as { fills: unknown[]; from: string };
+    expect(future.fills).toEqual([]);
+    expect(future.from).toBe("2999-01-01T00:00:00.000Z");
+    const other = (await (await authed("/api/tape/AAPL?account=nope")).json()) as { fills: unknown[] };
+    expect(other.fills).toEqual([]);
+    expect((await authed("/api/tape/AAPL?from=yesterday")).status).toBe(400);
+    const none = (await (await authed("/api/tape/ZZZZ")).json()) as { fills: unknown[]; pairs: unknown[]; realizedPnl: number };
+    expect(none).toMatchObject({ fills: [], pairs: [], realizedPnl: 0 });
   });
 });
