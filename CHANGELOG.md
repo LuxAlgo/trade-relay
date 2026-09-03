@@ -2,7 +2,14 @@
 
 All notable changes to trade-relay are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [0.2.0] - 2026-09-03
+
+### Added
+
+- Fills on the tape: a dashboard Tape panel that charts where each symbol's orders filled (buy and sell markers with sizes, dashed entry-to-exit lines with realized P&L from FIFO pairs, click-through to the signal's story), drawn by Vela (@luxalgo/vela, Apache-2.0) and backed by `GET /api/tape` and `GET /api/tape/:symbol`. Candles come from the account's port through the optional `BrokerPort.getBars` seam: the simulator draws its own deterministic one-minute bars from the prices the signals carried (`barsSource: "simulator"`), real brokers get bars from broker-sdk's `fetchBars` (Alpaca and Tradier in broker-sdk 0.5.0, detected at runtime; `barsSource` is the broker id), crypto pairs may chart public candles from Vela's bundled keyless providers in the browser, and otherwise the chart draws the fill path only; nothing is fabricated. Vela's bundle ships inside the package and is served from the relay's own origin at `GET /vela.global.min.js`, loaded only when the panel is opened
+- `@luxalgo/broker-sdk` 0.5.0: the port gates on the SDK's `supportsBars` before wiring bars. Tradier's market data is production-hosted, so a sandbox token yields no bars and the tape keeps the fill path.
+
+## [0.1.0]
 
 Initial public release.
 

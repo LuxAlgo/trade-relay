@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Manual release from the version-bumped commit on main, for when the tag
+  # cannot be pushed from where the release is cut.
+  workflow_dispatch:
 
 permissions:
   contents: read
