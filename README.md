@@ -2,6 +2,8 @@
   <img src="docs/assets/hero.svg" alt="Trade Relay, a LuxAlgo open source project. Alert to rails to order. Your server, your keys, your rails." width="100%"/>
 </p>
 
+<h1 align="center">Trade Relay</h1>
+
 <p align="center">
   <a href="https://github.com/LuxAlgo/trade-relay/actions/workflows/ci.yml"><img src="https://github.com/LuxAlgo/trade-relay/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000000?labelColor=000000&color=555555" alt="MIT license"/></a>
@@ -9,6 +11,8 @@
 </p>
 
 <p align="center">
+  <a href="https://www.luxalgo.com/trade-relay/"><b>Homepage</b></a>
+  &nbsp;·&nbsp;
   <a href="docs/payload.md"><b>Payload</b></a>
   &nbsp;·&nbsp;
   <a href="docs/safety.md"><b>Safety rails</b></a>
@@ -24,7 +28,7 @@
 
 **Trade Relay is a self-hosted relay between trading alerts and real broker accounts.** Point a TradingView alert, a Zapier zap, an AI agent, or anything that can send a webhook at your own deployment. It parses the alert, runs it through risk rails that are on by default, places the order at your broker with your own keys, and records the entire story locally.
 
-It runs as one small Node process with a single SQLite file: no external services, no account with anyone, no telemetry. Trade Relay is a [LuxAlgo](https://luxalgo.com) open-source project and this is the official repository.
+It runs as one small Node process with a single SQLite file: no external services, no account with anyone, no telemetry. Trade Relay is a [LuxAlgo](https://luxalgo.com) open-source project.
 
 ## Five minutes to a filled order
 
@@ -63,7 +67,7 @@ Where the candles come from, and the panel always says which:
 
 - **Simulator** — the simulator is the price process behind every simulated fill, so it draws its own one-minute bars: they start at the first signal's price, hit every price a signal carried at the moment it arrived, and follow a seeded walk in between. Deterministic, and labelled *simulated bars*.
 - **Real brokers** — bars come through [`@luxalgo/broker-sdk`](https://github.com/LuxAlgo/broker-sdk), never from broker code in this repo. The port uses the SDK's `fetchBars` (Alpaca and Tradier, from `@luxalgo/broker-sdk` 0.5.0). Tradier's market data is production-hosted, so a sandbox token gets no bars; those accounts, like any broker without bars, fall through to the next source and the panel says so.
-- **Crypto pairs** — when the server has no bars, the browser may chart real public candles from Vela's bundled keyless Binance or Coinbase providers, labelled *Binance public data* and so on; if the feed is unreachable, the chart falls back.
+- **Crypto pairs** — when the server has no bars, the browser may chart real public candles from Vela™'s bundled keyless Binance or Coinbase providers, labelled *Binance public data* and so on; if the feed is unreachable, the chart falls back.
 - **Otherwise the fill path** — the fills themselves as the price series, labelled *fill path, no market data*. The relay never fabricates a candle it did not see.
 
 The chart is drawn in the browser by [Vela](https://github.com/LuxAlgo/Vela), LuxAlgo's open-source charting library, shipped inside this package and served from your relay's own origin: nothing is fetched from a CDN, and the script only loads when you open the panel. The data behind it is one Bearer-protected call, `GET /api/tape/:symbol?from=&to=`, whose `bars`, `barsSource` and `barsTimeframe` fields carry whichever source applied.
@@ -95,7 +99,7 @@ Already sending alerts somewhere else? Migration is changing one URL. TradersPos
 The relay is also an MCP server. Claude or any MCP client can read positions, read the flight recorder ("why was my last signal rejected?"), and throw the kill switch. Trading through MCP exists only when a human sets `mcp.allowTrading: true`, and an agent's order travels the exact same risk pipeline as a webhook. No special paths.
 
 ```jsonc
-{ "mcpServers": { "trade-relay": { "command": "npx", "args": ["trade-relay", "mcp"] } } }
+{ "mcpServers": { "trade-relay": { "command": "npx", "args": ["-y", "@luxalgo/trade-relay", "mcp"], "cwd": "/path/to/your/relay" } } }
 ```
 
 For hosted agents and integrations there is a separate **agent token**: a revocable key with a scope you control, read-only by default, so your master token never leaves your hands. Built for TradingView alerts, and for the agents that come after them: [docs/mcp.md](docs/mcp.md).

@@ -6,7 +6,7 @@ trade-relay doubles as an MCP server: `trade-relay mcp` speaks the Model Context
 // Claude Desktop / Claude Code / any MCP client
 {
   "mcpServers": {
-    "trade-relay": { "command": "npx", "args": ["trade-relay", "mcp"], "cwd": "/path/to/your/relay" }
+    "trade-relay": { "command": "npx", "args": ["-y", "@luxalgo/trade-relay", "mcp"], "cwd": "/path/to/your/relay" }
   }
 }
 ```
